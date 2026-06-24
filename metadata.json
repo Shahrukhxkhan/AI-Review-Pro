@@ -1,0 +1,6 @@
+{
+  "name": "Review Manager Dashboard",
+  "description": "A review management system with a rich dashboard, review submission, edit history, and settings.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
