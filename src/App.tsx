@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useTransition } from 'react';
 import Sidebar from '@/components/Sidebar';
-import DashboardPage from '@/app/page';
+import DashboardPage from '@/components/DashboardView'; // Updated path
 import NewReviewPage from '@/app/new-review/page';
 import HistoryPage from '@/app/history/page';
 import SettingsPage from '@/app/settings/page';
@@ -10,6 +10,7 @@ import { CodeReview, Streak, DBUser } from '@/types';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 import { loadFromLocal, saveToLocal, SEED_REVIEWS } from '@/lib/utils';
 import { useUser } from '@/hooks/useUser';
+import { Plus } from 'lucide-react';
 
 export default function App() {
   const [currentTab, setCurrentTab] = useState<string>('dashboard');
@@ -354,9 +355,9 @@ export default function App() {
   }
 
   return (
-    <div id="app-root" className="flex flex-col md:flex-row min-h-screen bg-[#020203] text-slate-300 font-sans relative overflow-x-hidden">
+    <div id="app-root" className="flex min-h-screen bg-[#f4f6f8] text-[#1a2332] font-sans">
       
-      {/* Dark theme sidebar */}
+      {/* Sidebar */}
       <Sidebar 
         currentTab={currentTab} 
         setCurrentTab={changeTab} 
@@ -367,61 +368,67 @@ export default function App() {
       />
 
       {/* Main Content Area */}
-      <main id="main-content" className="flex-1 overflow-y-auto px-4 py-8 md:px-8 max-w-7xl relative z-10 mx-auto w-full">
-        
-        {isPending ? (
-          <div className="flex items-center justify-center h-full min-h-[50vh]">
-            <div className="flex flex-col items-center space-y-3">
-              <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-              <p className="text-zinc-500 text-xs font-semibold tracking-wider uppercase">Loading tab contents...</p>
-            </div>
+      <div className="flex-1 ml-[200px] flex flex-col">
+        {/* Topbar */}
+        <header className="h-[60px] bg-[#ffffff] border-b border-[#e0e5eb] flex items-center justify-between px-6">
+          <div>
+            <h1 className="text-[14px] font-medium text-[#1a2332] capitalize">{currentTab.replace('-', ' ')}</h1>
+            <p className="text-[11px] text-[#8a9ab0]">{new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
           </div>
-        ) : (
-          <>
-            {currentTab === 'dashboard' && (
-              <DashboardPage 
-                reviews={reviews} 
-                streak={streak}
-                currentUser={currentUser}
-                onGithubLogin={handleGithubLogin}
-                onLogout={handleLogout}
-                onNavigateToTab={changeTab} 
-              />
-            )}
-            
-            {currentTab === 'new-review' && (
-              <NewReviewPage onAddReview={handleAddReview} />
-            )}
+          <button 
+            onClick={() => changeTab('new-review')}
+            className="flex items-center gap-1 bg-[#1D9E75] text-[#ffffff] text-[11px] font-medium px-3 py-1.5 rounded-lg"
+          >
+            <Plus className="w-[13px] h-[13px]" />
+            New review
+          </button>
+        </header>
 
-            {currentTab === 'history' && (
-              <HistoryPage 
-                reviews={reviews} 
-                onDeleteReview={handleDeleteReview} 
-                selectedReviewId={selectedReviewId}
-                onSelectReviewId={handleSelectReviewId}
-              />
-            )}
+        {/* Content */}
+        <main id="main-content" className="flex-1 overflow-y-auto p-[20px_22px]">
+          {isPending ? (
+            <div className="flex items-center justify-center h-full">Loading...</div>
+          ) : (
+            <>
+              {currentTab === 'dashboard' && (
+                <DashboardPage 
+                  reviews={reviews} 
+                  streak={streak}
+                  currentUser={currentUser}
+                  onGithubLogin={handleGithubLogin}
+                  onLogout={handleLogout}
+                  onNavigateToTab={changeTab} 
+                />
+              )}
+              
+              {currentTab === 'new-review' && (
+                <NewReviewPage onAddReview={handleAddReview} />
+              )}
 
-            {currentTab === 'settings' && (
-              <SettingsPage 
-                currentUser={currentUser}
-                streak={streak}
-                onResetToSeed={handleResetToSeed} 
-                onClearAll={handleClearAll} 
-                onGithubLogin={handleGithubLogin}
-                onLogout={handleLogout}
-                isSupabaseConnected={isSupabaseConnected} 
-              />
-            )}
-          </>
-        )}
+              {currentTab === 'history' && (
+                <HistoryPage 
+                  reviews={reviews} 
+                  onDeleteReview={handleDeleteReview} 
+                  selectedReviewId={selectedReviewId}
+                  onSelectReviewId={handleSelectReviewId}
+                />
+              )}
 
-      </main>
-
-      {/* Environment Atmospheric Blurs */}
-      <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-600/5 rounded-full blur-[120px] pointer-events-none -z-0"></div>
-      <div className="absolute bottom-0 left-0 w-96 h-96 bg-purple-600/5 rounded-full blur-[120px] pointer-events-none -z-0"></div>
-
+              {currentTab === 'settings' && (
+                <SettingsPage 
+                  currentUser={currentUser}
+                  streak={streak}
+                  onResetToSeed={handleResetToSeed} 
+                  onClearAll={handleClearAll} 
+                  onGithubLogin={handleGithubLogin}
+                  onLogout={handleLogout}
+                  isSupabaseConnected={isSupabaseConnected} 
+                />
+              )}
+            </>
+          )}
+        </main>
+      </div>
     </div>
   );
 }
