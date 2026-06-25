@@ -86,9 +86,23 @@ create table if not exists public.streaks (
     last_reviewed_at timestamp with time zone
 );
 
+create table if not exists public.reports (
+    id uuid default gen_random_uuid() primary key,
+    user_id uuid references public.users(id) on delete cascade not null,
+    type text not null,
+    start_date timestamp with time zone not null,
+    end_date timestamp with time zone not null,
+    reviews_completed integer not null default 0,
+    average_score numeric(5, 2) not null,
+    most_common_issue text,
+    improvement_percentage numeric(5, 2) not null default 0,
+    created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
 alter table public.users enable row level security;
 alter table public.reviews enable row level security;
 alter table public.streaks enable row level security;
+alter table public.reports enable row level security;
 
 create policy "Users can read their own profile" on public.users for select using (auth.uid() = id);
 create policy "Users can write their own profile" on public.users for insert with check (auth.uid() = id);
@@ -96,7 +110,9 @@ create policy "Users can read their own reviews" on public.reviews for select us
 create policy "Users can insert their own reviews" on public.reviews for insert with check (auth.uid() = user_id);
 create policy "Users can delete their own reviews" on public.reviews for delete using (auth.uid() = user_id);
 create policy "Users can read their own streaks" on public.streaks for select using (auth.uid() = user_id);
-create policy "Users can update their own streaks" on public.streaks for update using (auth.uid() = user_id);`;
+create policy "Users can update their own streaks" on public.streaks for update using (auth.uid() = user_id);
+create policy "Users can read their own reports" on public.reports for select using (auth.uid() = user_id);
+create policy "Users can insert their own reports" on public.reports for insert with check (auth.uid() = user_id);`;
 
   return (
     <div id="settings-view" className="max-w-4xl mx-auto space-y-8 animate-fade-in font-sans">

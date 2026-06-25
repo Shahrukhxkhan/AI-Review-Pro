@@ -1,3 +1,16 @@
+export interface Report {
+  id: string; // uuid PK
+  user_id: string; // FK
+  type: 'weekly' | 'monthly';
+  start_date: string;
+  end_date: string;
+  reviews_completed: number;
+  average_score: number;
+  most_common_issue: string;
+  improvement_percentage: number;
+  created_at: string;
+}
+
 export interface DBUser {
   id: string; // uuid PK
   github_username: string;

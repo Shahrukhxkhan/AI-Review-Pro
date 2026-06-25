@@ -48,12 +48,28 @@ create table if not exists public.streaks (
     last_reviewed_at timestamp with time zone
 );
 
+-- Tables: reports
+-- Stores generated weekly/monthly performance reports.
+create table if not exists public.reports (
+    id uuid default gen_random_uuid() primary key,
+    user_id uuid references public.users(id) on delete cascade not null,
+    type text not null check (type in ('weekly', 'monthly')),
+    start_date timestamp with time zone not null,
+    end_date timestamp with time zone not null,
+    reviews_completed integer not null default 0,
+    average_score numeric(5, 2) not null,
+    most_common_issue text,
+    improvement_percentage numeric(5, 2) not null default 0,
+    created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
 -- --------------------------------------------------------------------
 -- 2. Enable Row Level Security (RLS)
 -- --------------------------------------------------------------------
 alter table public.users enable row level security;
 alter table public.reviews enable row level security;
 alter table public.streaks enable row level security;
+alter table public.reports enable row level security;
 
 -- --------------------------------------------------------------------
 -- 3. Configure Security access policies (RLS)
@@ -101,6 +117,14 @@ create policy "Allow authenticated users to initialize their own streak"
 create policy "Allow authenticated users to update their own streak"
     on public.streaks for update
     using (auth.uid() = user_id);
+
+create policy "Allow authenticated users to select their own reports"
+    on public.reports for select
+    using (auth.uid() = user_id);
+
+create policy "Allow authenticated users to insert their own reports"
+    on public.reports for insert
+    with check (auth.uid() = user_id);
 
 -- --------------------------------------------------------------------
 -- 4. Automated Auth Synchronization Trigger

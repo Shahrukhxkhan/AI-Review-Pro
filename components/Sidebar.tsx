@@ -5,7 +5,8 @@ import {
   History, 
   TrendingUp, 
   Settings,
-  LogOut
+  LogOut,
+  FileText
 } from 'lucide-react';
 import { DBUser, Streak } from '@/types';
 
@@ -28,6 +29,7 @@ export default function Sidebar({ currentTab, setCurrentTab, currentUser, onLogo
 
   const analyticsNav = [
     { name: 'Progress', tab: 'progress', icon: TrendingUp },
+    { name: 'Reports', tab: 'reports', icon: FileText },
     { name: 'Settings', tab: 'settings', icon: Settings },
   ];
 

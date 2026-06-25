@@ -2,6 +2,7 @@ import React, { useState, useEffect, useTransition } from 'react';
 import Sidebar from '@/components/Sidebar';
 import DashboardPage from '@/components/DashboardView'; // Updated path
 import AnalyticsPage from '@/components/AnalyticsView';
+import ReportsPage from '@/components/ReportsView';
 import NewReviewPage from '@/app/new-review/page';
 import HistoryPage from '@/app/history/page';
 import SettingsPage from '@/app/settings/page';
@@ -39,6 +40,9 @@ export default function App() {
         setSelectedReviewId(null);
       } else if (pathname === '/new-review') {
         setCurrentTab('new-review');
+        setSelectedReviewId(null);
+      } else if (pathname === '/reports') {
+        setCurrentTab('reports');
         setSelectedReviewId(null);
       } else if (pathname === '/settings') {
         setCurrentTab('settings');
@@ -404,6 +408,10 @@ export default function App() {
               
               {currentTab === 'progress' && (
                 <AnalyticsPage reviews={reviews} />
+              )}
+              
+              {currentTab === 'reports' && (
+                <ReportsPage />
               )}
               
               {currentTab === 'new-review' && (
