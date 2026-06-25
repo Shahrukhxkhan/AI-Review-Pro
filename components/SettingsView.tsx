@@ -14,7 +14,9 @@ import {
   GitBranch,
   Github,
   Monitor,
-  Copy
+  Copy,
+  User,
+  LogOut
 } from 'lucide-react';
 import { Streak, DBUser } from '@/types';
 import { getEnvKeys } from '@/lib/supabase';
@@ -55,8 +57,6 @@ export default function SettingsView({
   };
 
   const sqlSchemaScript = `-- SUPABASE CODES TABLE CREATIONS SCRIPT
--- Copy and paste this directly in the Supabase SQL Editor:
-
 create table if not exists public.users (
     id uuid references auth.users on delete cascade primary key,
     github_username text not null,
@@ -103,8 +103,8 @@ create policy "Users can update their own streaks" on public.streaks for update 
       
       {/* View Header */}
       <div id="settings-title-section">
-        <h2 className="text-3xl font-extrabold text-white tracking-tight">System Configuration</h2>
-        <p className="text-slate-400 text-sm mt-1">Bind environment credentials, view copyable migration triggers, and execute state wipes.</p>
+        <h2 className="text-3xl font-extrabold text-white tracking-tight">Settings</h2>
+        <p className="text-slate-400 text-sm mt-1">Manage your profile, account connections, and data preferences.</p>
       </div>
 
       {/* Grid: 2 columns */}
@@ -113,176 +113,205 @@ create policy "Users can update their own streaks" on public.streaks for update 
         {/* Left column (State and keys info) */}
         <div className="lg:col-span-3 space-y-6">
           
-          {/* Supabase status block */}
-          <div id="connection-status-card" className="bg-[#0a0a0c] p-6 rounded-2xl border border-slate-800/85 space-y-4 shadow-md">
-            <div className="flex items-center space-x-3.5">
-              <div className={`p-2.5 rounded-xl border shrink-0
-                ${isSupabaseConnected 
-                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
-                  : 'bg-amber-500/5 text-amber-500 border-amber-500/20'}`}
-              >
-                <Database className="h-5.5 w-5.5" />
+          {/* Profile Card */}
+          <div className="bg-[#0a0a0c] p-6 rounded-2xl border border-slate-800/85 space-y-4 shadow-md">
+            <h3 className="font-bold text-white flex items-center gap-2"><User className="h-4 w-4" /> Profile</h3>
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-slate-800 rounded-full flex items-center justify-center font-bold text-slate-500">
+                {currentUser?.github_username?.substring(0, 2).toUpperCase() || 'U'}
               </div>
               <div>
-                <h3 className="font-extrabold text-white text-base">Backend Connection StatusStatus</h3>
-                <p className="text-slate-500 text-[10px] font-bold font-mono uppercase tracking-wider mt-0.5">
-                  Live cloud synchronizer sync state
-                </p>
+                <p className="font-bold text-slate-100">{currentUser?.github_username || 'Anonymous User'}</p>
+                <p className="text-xs text-slate-500">{currentUser?.email || 'No email associated'}</p>
               </div>
             </div>
-
-            {isSupabaseConnected ? (
-              <div id="connected-alert" className="p-4 rounded-xl bg-emerald-500/5 text-emerald-350 text-xs border border-emerald-500/10 leading-relaxed space-y-2">
-                <p className="font-extrabold flex items-center gap-2 text-emerald-400">
-                  <CheckCircle2 className="h-4.5 w-4.5 text-emerald-400" />
-                  <span>Supabase cloud database is connected successfully!</span>
-                </p>
-                <p className="text-slate-450 leading-relaxed">
-                  Your developer reviews and streak metrics are persisted directly inside your private real-time Postgres instance. Logged in as: <code className="bg-slate-900 border border-slate-800 text-slate-300 font-bold px-1 py-0.5 rounded ml-1 font-mono">{currentUser?.github_username || 'anonymous'}</code>
-                </p>
-              </div>
-            ) : (
-              <div id="disconnected-alert" className="p-4 rounded-xl bg-slate-950/60 text-slate-300 text-xs border border-slate-800/80 leading-relaxed space-y-2">
-                <p className="font-extrabold flex items-center gap-2 text-slate-400">
-                  <Info className="h-4.5 w-4.5 text-slate-500" />
-                  <span>Running in Offline persistence mode (Local Storage fallback)</span>
-                </p>
-                <p className="text-slate-500">
-                  No active variables detected in environment variables. The sandbox is maintaining a seamless offline mock simulation, saving evaluations inside the device's storage.
-                </p>
-                <p className="text-[11px] text-indigo-400/90 font-bold pt-1">
-                  💡 Set <code className="bg-slate-900 border border-slate-805 text-slate-300 px-1.5 py-0.5 rounded font-mono">VITE_PUBLIC_SUPABASE_URL</code> and <code className="bg-slate-900 border border-slate-805 text-slate-300 px-1.5 py-0.5 rounded font-mono">VITE_PUBLIC_SUPABASE_ANON_KEY</code> to enable remote syncing.
-                </p>
-              </div>
-            )}
+            <button 
+              onClick={onLogout}
+              className="w-full inline-flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 font-bold py-2 rounded-xl text-xs transition cursor-pointer"
+            >
+              <LogOut className="h-4 w-4" />
+              <span>Logout</span>
+            </button>
           </div>
-
-          {/* Environmental bindings list */}
-          <div className="bg-[#0a0a0c] p-6 rounded-2xl border border-slate-800/85 space-y-5 shadow-md">
-            <div className="flex items-center space-x-3">
-              <Key className="h-4.5 w-4.5 text-slate-400" />
-              <h3 className="font-extrabold text-white text-sm">Recognized Environmental Parameters</h3>
+          
+          <div className="flex items-center space-x-3.5">
+            <div className={`p-2.5 rounded-xl border shrink-0
+              ${isSupabaseConnected 
+                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+                : 'bg-amber-500/5 text-amber-500 border-amber-500/20'}`}
+            >
+              <Database className="h-5.5 w-5.5" />
             </div>
-
-            <div className="space-y-4 font-mono text-[10px]">
-              
-              {/* URL */}
-              <div className="space-y-1.5">
-                <div className="flex justify-between items-center font-sans">
-                  <span className="font-bold text-slate-400">VITE_PUBLIC_SUPABASE_URL</span>
-                  <button 
-                    onClick={() => handleCopyText('url', envKeys.supabaseUrl)}
-                    className="text-indigo-400 hover:text-indigo-300 font-bold text-[11px] cursor-pointer"
-                  >
-                    {copiedKey === 'url' ? 'Copied ✓' : 'Copy'}
-                  </button>
-                </div>
-                <div className="bg-[#050507] p-2.5 rounded-lg border border-slate-850 text-slate-300 break-all select-all">
-                  {envKeys.supabaseUrl || <span className="font-sans italic text-slate-650">Empty (Not Configured)</span>}
-                </div>
-              </div>
-
-              {/* Key */}
-              <div className="space-y-1.5">
-                <div className="flex justify-between items-center font-sans">
-                  <span className="font-bold text-slate-400">VITE_PUBLIC_SUPABASE_ANON_KEY</span>
-                  <button 
-                    onClick={() => handleCopyText('anon', envKeys.supabaseAnonKey)}
-                    className="text-indigo-400 hover:text-indigo-300 font-bold text-[11px] cursor-pointer"
-                  >
-                    {copiedKey === 'anon' ? 'Copied ✓' : 'Copy'}
-                  </button>
-                </div>
-                <div className="bg-[#050507] p-2.5 rounded-lg border border-slate-850 text-slate-300 break-all select-all truncate">
-                  {envKeys.supabaseAnonKey || <span className="font-sans italic text-slate-650">Empty (Not Configured)</span>}
-                </div>
-              </div>
-
-            </div>
-          </div>
-
-          {/* Database state managers */}
-          <div className="bg-[#0a0a0c] p-6 rounded-2xl border border-slate-800/85 space-y-5 shadow-md">
             <div>
-              <h3 className="font-extrabold text-white text-sm">Sandbox Cache Controllers</h3>
-              <p className="text-slate-500 text-xs mt-0.5">Wipe logs, metrics, or reset seed states.</p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              
-              {/* Button: Seed */}
-              <div className="flex flex-col gap-2">
-                {!showSeedWarning ? (
-                  <button
-                    id="seed-state-btn"
-                    onClick={() => setShowSeedWarning(true)}
-                    className="inline-flex items-center justify-center gap-2 bg-[#050507] hover:bg-white/5 border border-slate-800 text-slate-300 font-bold py-3 px-4 rounded-xl text-xs transition cursor-pointer"
-                  >
-                    <RotateCcw className="h-4 w-4 text-indigo-400" />
-                    <span>Load Default Seeds</span>
-                  </button>
-                ) : (
-                  <div className="flex flex-col p-3 rounded-xl bg-indigo-950/10 border border-indigo-900/30 gap-2 animate-fade-in text-center">
-                    <p className="text-[10px] text-indigo-300 font-semibold leading-tight">Replace draft listings with seed items?</p>
-                    <div className="flex gap-2">
-                      <button 
-                        onClick={() => {
-                          onResetToSeed();
-                          setShowSeedWarning(false);
-                        }}
-                        className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-1.5 rounded-lg text-[10px] cursor-pointer"
-                      >
-                        Confirm
-                      </button>
-                      <button 
-                        onClick={() => setShowSeedWarning(false)}
-                        className="flex-1 bg-slate-900 text-slate-400 py-1.5 rounded-lg text-[10px] cursor-pointer"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Button: Clear */}
-              <div className="flex flex-col gap-2">
-                {!showClearWarning ? (
-                  <button
-                    id="clear-state-btn"
-                    onClick={() => setShowClearWarning(true)}
-                    className="inline-flex items-center justify-center gap-2 bg-[#1c080e] hover:bg-rose-950/20 border border-rose-900/50 text-rose-400 font-bold py-3 px-4 rounded-xl text-xs transition cursor-pointer"
-                  >
-                    <AlertTriangle className="h-4 w-4" />
-                    <span>Wipe Table Records</span>
-                  </button>
-                ) : (
-                  <div className="flex flex-col p-3 rounded-xl bg-rose-950/20 border border-rose-905/35 gap-2 animate-fade-in text-center">
-                    <p className="text-[10px] text-rose-300 font-semibold leading-tight">Irrerversible. Clean all evaluations?</p>
-                    <div className="flex gap-2">
-                      <button 
-                        onClick={() => {
-                          onClearAll();
-                          setShowClearWarning(false);
-                        }}
-                        className="flex-1 bg-rose-700 hover:bg-rose-600 text-white font-bold py-1.5 rounded-lg text-[10px] cursor-pointer"
-                      >
-                        Clear Database
-                      </button>
-                      <button 
-                        onClick={() => setShowClearWarning(false)}
-                        className="flex-1 bg-slate-900 text-slate-400 py-1.5 rounded-lg text-[10px] cursor-pointer"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-
+              <h3 className="font-extrabold text-white text-base">Backend Connection Status</h3>
+              <p className="text-slate-500 text-[10px] font-bold font-mono uppercase tracking-wider mt-0.5">
+                Live cloud synchronizer sync state
+              </p>
             </div>
           </div>
 
+          {isSupabaseConnected ? (
+            <div id="connected-alert" className="p-4 rounded-xl bg-emerald-500/5 text-emerald-350 text-xs border border-emerald-500/10 leading-relaxed space-y-2">
+              <p className="font-extrabold flex items-center gap-2 text-emerald-400">
+                <CheckCircle2 className="h-4.5 w-4.5 text-emerald-400" />
+                <span>Supabase cloud database is connected successfully!</span>
+              </p>
+              <p className="text-slate-450 leading-relaxed">
+                Your developer reviews and streak metrics are persisted directly inside your private real-time Postgres instance. Logged in as: <code className="bg-slate-900 border border-slate-800 text-slate-300 font-bold px-1 py-0.5 rounded ml-1 font-mono">{currentUser?.github_username || 'anonymous'}</code>
+              </p>
+            </div>
+          ) : (
+            <div id="disconnected-alert" className="p-4 rounded-xl bg-slate-950/60 text-slate-300 text-xs border border-slate-800/80 leading-relaxed space-y-2">
+              <p className="font-extrabold flex items-center gap-2 text-slate-400">
+                <Info className="h-4.5 w-4.5 text-slate-500" />
+                <span>Running in Offline persistence mode (Local Storage fallback)</span>
+              </p>
+              <p className="text-slate-500">
+                No active variables detected in environment variables. The sandbox is maintaining a seamless offline mock simulation, saving evaluations inside the device's storage.
+              </p>
+              <p className="text-[11px] text-indigo-400/90 font-bold pt-1">
+                💡 Set <code className="bg-slate-900 border border-slate-805 text-slate-300 px-1.5 py-0.5 rounded font-mono">VITE_PUBLIC_SUPABASE_URL</code> and <code className="bg-slate-900 border border-slate-805 text-slate-300 px-1.5 py-0.5 rounded font-mono">VITE_PUBLIC_SUPABASE_ANON_KEY</code> to enable remote syncing.
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Environmental bindings list */}
+        <div className="bg-[#0a0a0c] p-6 rounded-2xl border border-slate-800/85 space-y-5 shadow-md">
+          <div className="flex items-center space-x-3">
+            <Key className="h-4.5 w-4.5 text-slate-400" />
+            <h3 className="font-extrabold text-white text-sm">Recognized Environmental Parameters</h3>
+          </div>
+
+          <div className="space-y-4 font-mono text-[10px]">
+            
+            {/* URL */}
+            <div className="space-y-1.5">
+              <div className="flex justify-between items-center font-sans">
+                <span className="font-bold text-slate-400">VITE_PUBLIC_SUPABASE_URL</span>
+                <button 
+                  onClick={() => handleCopyText('url', envKeys.supabaseUrl)}
+                  className="text-indigo-400 hover:text-indigo-300 font-bold text-[11px] cursor-pointer"
+                >
+                  {copiedKey === 'url' ? 'Copied ✓' : 'Copy'}
+                </button>
+              </div>
+              <div className="bg-[#050507] p-2.5 rounded-lg border border-slate-850 text-slate-300 break-all select-all">
+                {envKeys.supabaseUrl || <span className="font-sans italic text-slate-650">Empty (Not Configured)</span>}
+              </div>
+            </div>
+
+            {/* Key */}
+            <div className="space-y-1.5">
+              <div className="flex justify-between items-center font-sans">
+                <span className="font-bold text-slate-400">VITE_PUBLIC_SUPABASE_ANON_KEY</span>
+                <button 
+                  onClick={() => handleCopyText('anon', envKeys.supabaseAnonKey)}
+                  className="text-indigo-400 hover:text-indigo-300 font-bold text-[11px] cursor-pointer"
+                >
+                  {copiedKey === 'anon' ? 'Copied ✓' : 'Copy'}
+                </button>
+              </div>
+              <div className="bg-[#050507] p-2.5 rounded-lg border border-slate-850 text-slate-300 break-all select-all truncate">
+                {envKeys.supabaseAnonKey || <span className="font-sans italic text-slate-650">Empty (Not Configured)</span>}
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        {/* Database state managers */}
+        <div className="bg-[#0a0a0c] p-6 rounded-2xl border border-slate-800/85 space-y-5 shadow-md">
+          <div>
+            <h3 className="font-extrabold text-white text-sm">Sandbox Cache Controllers</h3>
+            <p className="text-slate-500 text-xs mt-0.5">Wipe logs, metrics, or reset seed states.</p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            
+            {/* Button: Seed */}
+            <div className="flex flex-col gap-2">
+              {!showSeedWarning ? (
+                <button
+                  id="seed-state-btn"
+                  onClick={() => setShowSeedWarning(true)}
+                  className="inline-flex items-center justify-center gap-2 bg-[#050507] hover:bg-white/5 border border-slate-800 text-slate-300 font-bold py-3 px-4 rounded-xl text-xs transition cursor-pointer"
+                >
+                  <RotateCcw className="h-4 w-4 text-indigo-400" />
+                  <span>Load Default Seeds</span>
+                </button>
+              ) : (
+                <div className="flex flex-col p-3 rounded-xl bg-indigo-950/10 border border-indigo-900/30 gap-2 animate-fade-in text-center">
+                  <p className="text-[10px] text-indigo-300 font-semibold leading-tight">Replace draft listings with seed items?</p>
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => {
+                        onResetToSeed();
+                        setShowSeedWarning(false);
+                      }}
+                      className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-1.5 rounded-lg text-[10px] cursor-pointer"
+                    >
+                      Confirm
+                    </button>
+                    <button 
+                      onClick={() => setShowSeedWarning(false)}
+                      className="flex-1 bg-slate-900 text-slate-400 py-1.5 rounded-lg text-[10px] cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Button: Clear */}
+            <div className="flex flex-col gap-2">
+              {!showClearWarning ? (
+                <button
+                  id="clear-state-btn"
+                  onClick={() => setShowClearWarning(true)}
+                  className="inline-flex items-center justify-center gap-2 bg-[#1c080e] hover:bg-rose-950/20 border border-rose-900/50 text-rose-400 font-bold py-3 px-4 rounded-xl text-xs transition cursor-pointer"
+                >
+                  <AlertTriangle className="h-4 w-4" />
+                  <span>Wipe Table Records</span>
+                </button>
+              ) : (
+                <div className="flex flex-col p-3 rounded-xl bg-rose-950/20 border border-rose-905/35 gap-2 animate-fade-in text-center">
+                  <p className="text-[10px] text-rose-300 font-semibold leading-tight">Irrerversible. Clean all evaluations?</p>
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => {
+                        onClearAll();
+                        setShowClearWarning(false);
+                      }}
+                      className="flex-1 bg-rose-700 hover:bg-rose-600 text-white font-bold py-1.5 rounded-lg text-[10px] cursor-pointer"
+                    >
+                      Clear Database
+                    </button>
+                    <button 
+                      onClick={() => setShowClearWarning(false)}
+                      className="flex-1 bg-slate-900 text-slate-400 py-1.5 rounded-lg text-[10px] cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            {/* Manual Sync Button */}
+            <button className="inline-flex items-center justify-center gap-2 bg-[#050507] hover:bg-white/5 border border-slate-800 text-slate-300 font-bold py-3 px-4 rounded-xl text-xs transition cursor-pointer">
+              <Check className="h-4 w-4 text-emerald-400" />
+              <span>Manual Sync</span>
+            </button>
+            
+            {/* Export Data Button */}
+            <button className="inline-flex items-center justify-center gap-2 bg-[#050507] hover:bg-white/5 border border-slate-800 text-slate-300 font-bold py-3 px-4 rounded-xl text-xs transition cursor-pointer">
+              <Copy className="h-4 w-4 text-indigo-400" />
+              <span>Export Data</span>
+            </button>
+
+          </div>
         </div>
 
         {/* Right column (Copy SQL and setup details) */}
@@ -339,23 +368,8 @@ create policy "Users can update their own streaks" on public.streaks for update 
               </div>
             </div>
           </div>
-
-        </div>
-
-      </div>
-
-      {/* Build tracking bar */}
-      <div id="build-info-card" className="bg-[#050507] p-5 rounded-2xl border border-slate-850 flex items-center justify-between text-[11px] text-slate-500 font-medium font-mono">
-        <div className="flex items-center space-x-2">
-          <Server className="h-4 w-4 text-slate-600" />
-          <span>Vite Engine Sandbox Container</span>
-        </div>
-        <div className="flex items-center space-x-1">
-          <Clock className="h-3.5 w-3.5 text-slate-600" />
-          <span>Active Session Frame</span>
         </div>
       </div>
-
     </div>
   );
 }
