@@ -1,7 +1,7 @@
 import express from 'express';
 import path from 'path';
 import dotenv from 'dotenv';
-import Anthropic from '@anthropic-ai/sdk';
+import { GoogleGenAI } from '@google/genai';
 import { createClient } from '@supabase/supabase-js';
 import { createServer as createViteServer } from 'vite';
 
@@ -30,13 +30,13 @@ async function startServer() {
   // Support JSON parsing in post bodies
   app.use(express.json());
 
-  // Initialize Anthropic client (lazy init helper)
-  const getAnthropic = () => {
-    const key = process.env.ANTHROPIC_API_KEY;
+  // Initialize Gemini client (lazy init helper)
+  const getGemini = () => {
+    const key = process.env.GEMINI_API_KEY;
     if (!key) {
-      throw new Error('ANTHROPIC_API_KEY environment variable is not configured.');
+      throw new Error('GEMINI_API_KEY environment variable is not configured.');
     }
-    return new Anthropic({ apiKey: key });
+    return new GoogleGenAI({ apiKey: key });
   };
 
   // Initialize server-side Supabase client (lazy init helper)
@@ -113,46 +113,28 @@ async function startServer() {
     }
 
     try {
-      const anthropic = getAnthropic();
+      const ai = getGemini();
       
-      const fetchReviewWithRetry = async (retryCount = 0): Promise<any> => {
-        try {
-          const response = await anthropic.messages.create({
-            model: 'claude-3-5-sonnet-20241022',
-            max_tokens: 4000,
-            system: `You are an expert code reviewer. Analyze the provided code and return ONLY a valid JSON object with this exact structure:
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.5-flash',
+        contents: `Please review this code snippet written in ${language}:\n\n${code}`,
+        config: {
+          systemInstruction: `You are an expert code reviewer. Analyze the provided code and return ONLY a valid JSON object with this exact structure:
 {
-  "overall_score": number (0-100),
-  "bug_score": number (0-100),
-  "security_score": number (0-100),
-  "readability_score": number (0-100),
-  "complexity_score": number (0-100),
+  "overall_score": number,
+  "bug_score": number,
+  "security_score": number,
+  "readability_score": number,
+  "complexity_score": number,
   "issues": [{ "type": string, "severity": "low"|"medium"|"high", "line": number, "description": string }],
   "suggestions": [{ "title": string, "explanation": string, "improved_code": string }],
   "summary": string
 }`,
-            messages: [
-              {
-                role: 'user',
-                content: `Please review this code snippet written in ${language}:\n\n${code}`
-              }
-            ]
-          });
-
-          const textBlock = response.content[0];
-          const rawText = textBlock.type === 'text' ? textBlock.text : '';
-          return cleanAndParseJSON(rawText);
-        } catch (err) {
-          if (retryCount < 1) {
-            console.warn('API error or malformed JSON returned from Claude. Retrying once...', err);
-            return fetchReviewWithRetry(retryCount + 1);
-          }
-          throw err;
+          responseMimeType: 'application/json'
         }
-      };
+      });
 
-      // Perform evaluation
-      const claudeOutput = await fetchReviewWithRetry();
+      const claudeOutput = JSON.parse(response.text!);
 
       // Retrieve authentication details from authorization headers if mapped
       const authHeader = req.headers.authorization;
