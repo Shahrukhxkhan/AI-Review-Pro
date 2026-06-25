@@ -50,7 +50,9 @@ export default function HistoryView({
   const [search, setSearch] = useState('');
   const [languageFilter, setLanguageFilter] = useState<string>('All');
   const [scoreFilter, setScoreFilter] = useState<string>('All'); // 'All' | 'poor' | 'average' | 'good'
-  
+  const [sortBy, setSortBy] = useState<string>('Date: Newest');
+  const [dateRangeFilter, setDateRangeFilter] = useState<string>('All');
+
   // Pagination State
   const [visibleCount, setVisibleCount] = useState<number>(10);
 
@@ -162,9 +164,9 @@ export default function HistoryView({
     }
   };
 
-  // Filter logic: search, language, AND score category
+  // Filter logic: search, language, score category, date range, and sorting
   const filteredReviews = useMemo(() => {
-    return reviews.filter(r => {
+    let result = [...reviews].filter(r => {
       // 1. Language constraint matching
       const matchLanguage = languageFilter === 'All' || r.language === languageFilter;
 
@@ -179,15 +181,39 @@ export default function HistoryView({
         matchScore = score > 75;
       }
 
-      // 3. Search substring lookup
+      // 3. Date range filtering
+      let matchDate = true;
+      if (dateRangeFilter !== 'All') {
+        const reviewDate = new Date(r.created_at);
+        const now = new Date();
+        const diffDays = (now.getTime() - reviewDate.getTime()) / (1000 * 60 * 60 * 24);
+        if (dateRangeFilter === 'Last 7 Days') {
+          matchDate = diffDays <= 7;
+        } else if (dateRangeFilter === 'Last 30 Days') {
+          matchDate = diffDays <= 30;
+        }
+      }
+
+      // 4. Search substring lookup
       const summaryText = r.feedback?.summary || r.summary || '';
       const matchSearch = r.code_snippet.toLowerCase().includes(search.toLowerCase()) ||
                           r.language.toLowerCase().includes(search.toLowerCase()) ||
                           summaryText.toLowerCase().includes(search.toLowerCase());
 
-      return matchLanguage && matchScore && matchSearch;
+      return matchLanguage && matchScore && matchDate && matchSearch;
     });
-  }, [reviews, search, languageFilter, scoreFilter]);
+
+    // Sorting
+    result.sort((a, b) => {
+      if (sortBy === 'Date: Newest') return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      if (sortBy === 'Date: Oldest') return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      if (sortBy === 'Score: High') return (b.overall_score || 0) - (a.overall_score || 0);
+      if (sortBy === 'Score: Low') return (a.overall_score || 0) - (b.overall_score || 0);
+      return 0;
+    });
+
+    return result;
+  }, [reviews, search, languageFilter, scoreFilter, sortBy, dateRangeFilter]);
 
   // Get current paginated list chunk
   const paginatedReviews = useMemo(() => {
@@ -234,12 +260,12 @@ export default function HistoryView({
         <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
           
           {/* Text Search Box */}
-          <div className="relative md:col-span-6">
+          <div className="relative md:col-span-3">
             <Search className="absolute left-3.5 top-3.5 h-4 w-4 text-slate-500" />
             <input
               id="history-search-input"
               type="text"
-              placeholder="Search keyword, language, issues, summary..."
+              placeholder="Search..."
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value);
@@ -249,17 +275,29 @@ export default function HistoryView({
             />
           </div>
 
-          {/* Segmented Score Filters */}
-          <div className="md:col-span-6 flex flex-col sm:flex-row gap-2 justify-end items-start sm:items-center">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest font-mono">
-              Score rating:
-            </span>
-            <div className="flex bg-[#050507] p-1 rounded-xl border border-slate-850 w-full sm:w-auto">
+          {/* Sort & Date Controls */}
+          <div className="md:col-span-9 flex flex-wrap gap-2 justify-end">
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="bg-[#050507] text-white text-xs px-3 py-2 rounded-xl border border-slate-800 focus:outline-none"
+            >
+              {['Date: Newest', 'Date: Oldest', 'Score: High', 'Score: Low'].map(opt => <option key={opt}>{opt}</option>)}
+            </select>
+            <select
+              value={dateRangeFilter}
+              onChange={(e) => setDateRangeFilter(e.target.value)}
+              className="bg-[#050507] text-white text-xs px-3 py-2 rounded-xl border border-slate-800 focus:outline-none"
+            >
+              {['All', 'Last 7 Days', 'Last 30 Days'].map(opt => <option key={opt}>{opt}</option>)}
+            </select>
+            {/* Score Filters */}
+            <div className="flex bg-[#050507] p-1 rounded-xl border border-slate-850">
               {[
                 { id: 'All', label: 'All' },
-                { id: 'poor', label: 'Poor (<50)' },
-                { id: 'average', label: 'Average (50-75)' },
-                { id: 'good', label: 'Good (>75)' }
+                { id: 'poor', label: 'Poor' },
+                { id: 'average', label: 'Avg' },
+                { id: 'good', label: 'Good' }
               ].map(opt => (
                 <button
                   key={opt.id}
@@ -267,7 +305,7 @@ export default function HistoryView({
                     setScoreFilter(opt.id);
                     setVisibleCount(10);
                   }}
-                  className={`flex-1 sm:flex-none px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition cursor-pointer select-none
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition cursor-pointer select-none
                     ${scoreFilter === opt.id 
                       ? 'bg-[#a855f7]/15 text-[#c084fc] border border-[#a855f7]/25 shadow-sm' 
                       : 'text-slate-400 hover:text-white'}`}
