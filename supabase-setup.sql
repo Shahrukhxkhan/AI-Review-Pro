@@ -63,6 +63,17 @@ create table if not exists public.reports (
     created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
+-- Tables: notifications
+-- Stores system alerts for streak, achievement, and sync issues.
+create table if not exists public.notifications (
+    id uuid default gen_random_uuid() primary key,
+    user_id uuid references public.users(id) on delete cascade not null,
+    message text not null,
+    type text not null check (type in ('streak_risk', 'achievement', 'report_generated', 'sync_failure')),
+    read boolean default false,
+    created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
 -- --------------------------------------------------------------------
 -- 2. Enable Row Level Security (RLS)
 -- --------------------------------------------------------------------
@@ -70,6 +81,7 @@ alter table public.users enable row level security;
 alter table public.reviews enable row level security;
 alter table public.streaks enable row level security;
 alter table public.reports enable row level security;
+alter table public.notifications enable row level security;
 
 -- --------------------------------------------------------------------
 -- 3. Configure Security access policies (RLS)
@@ -125,6 +137,18 @@ create policy "Allow authenticated users to select their own reports"
 create policy "Allow authenticated users to insert their own reports"
     on public.reports for insert
     with check (auth.uid() = user_id);
+
+create policy "Allow authenticated users to select their own notifications"
+    on public.notifications for select
+    using (auth.uid() = user_id);
+
+create policy "Allow authenticated users to insert their own notifications"
+    on public.notifications for insert
+    with check (auth.uid() = user_id);
+
+create policy "Allow authenticated users to update their own notifications"
+    on public.notifications for update
+    using (auth.uid() = user_id);
 
 -- --------------------------------------------------------------------
 -- 4. Automated Auth Synchronization Trigger

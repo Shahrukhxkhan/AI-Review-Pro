@@ -11,6 +11,15 @@ export interface Report {
   created_at: string;
 }
 
+export interface Notification {
+  id: string;
+  user_id: string;
+  message: string;
+  type: 'streak_risk' | 'achievement' | 'report_generated' | 'sync_failure';
+  read: boolean;
+  created_at: string;
+}
+
 export interface DBUser {
   id: string; // uuid PK
   github_username: string;

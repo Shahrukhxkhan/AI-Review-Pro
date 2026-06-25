@@ -3,6 +3,7 @@ import Sidebar from '@/components/Sidebar';
 import DashboardPage from '@/components/DashboardView'; // Updated path
 import AnalyticsPage from '@/components/AnalyticsView';
 import ReportsPage from '@/components/ReportsView';
+import NotificationCenter from '@/components/NotificationCenter';
 import NewReviewPage from '@/app/new-review/page';
 import HistoryPage from '@/app/history/page';
 import SettingsPage from '@/app/settings/page';
@@ -380,13 +381,16 @@ export default function App() {
             <h1 className="text-[14px] font-medium text-[#1a2332] capitalize">{currentTab.replace('-', ' ')}</h1>
             <p className="text-[11px] text-[#8a9ab0]">{new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
           </div>
-          <button 
-            onClick={() => changeTab('new-review')}
-            className="flex items-center gap-1 bg-[#1D9E75] text-[#ffffff] text-[11px] font-medium px-3 py-1.5 rounded-lg"
-          >
-            <Plus className="w-[13px] h-[13px]" />
-            New review
-          </button>
+          <div className="flex items-center gap-4">
+              <NotificationCenter />
+              <button 
+                onClick={() => changeTab('new-review')}
+                className="flex items-center gap-1 bg-[#1D9E75] text-[#ffffff] text-[11px] font-medium px-3 py-1.5 rounded-lg"
+              >
+                <Plus className="w-[13px] h-[13px]" />
+                New review
+              </button>
+          </div>
         </header>
 
         {/* Content */}
