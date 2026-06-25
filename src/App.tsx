@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useTransition } from 'react';
 import Sidebar from '@/components/Sidebar';
 import DashboardPage from '@/components/DashboardView'; // Updated path
+import AnalyticsPage from '@/components/AnalyticsView';
 import NewReviewPage from '@/app/new-review/page';
 import HistoryPage from '@/app/history/page';
 import SettingsPage from '@/app/settings/page';
@@ -399,6 +400,10 @@ export default function App() {
                   onLogout={handleLogout}
                   onNavigateToTab={changeTab} 
                 />
+              )}
+              
+              {currentTab === 'progress' && (
+                <AnalyticsPage reviews={reviews} />
               )}
               
               {currentTab === 'new-review' && (
