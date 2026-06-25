@@ -22,6 +22,7 @@ import { formatDate } from '@/lib/utils';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 import { useUser } from '@/hooks/useUser';
 import ReviewResult from './ReviewResult';
+import { exportToJson, exportToMarkdown, exportToPdf } from '@/lib/export';
 
 interface HistoryViewProps {
   reviews?: CodeReview[];
@@ -275,8 +276,13 @@ export default function HistoryView({
             />
           </div>
 
-          {/* Sort & Date Controls */}
+          {/* Sort & Date Controls & Export */}
           <div className="md:col-span-9 flex flex-wrap gap-2 justify-end">
+            <div className="flex gap-2 mr-4">
+              <button onClick={() => exportToJson(filteredReviews, 'history')} className="text-[10px] font-bold text-slate-400 hover:text-white transition">JSON</button>
+              <button onClick={() => exportToMarkdown(filteredReviews, 'history')} className="text-[10px] font-bold text-slate-400 hover:text-white transition">MD</button>
+              <button onClick={() => exportToPdf(filteredReviews, 'history')} className="text-[10px] font-bold text-slate-400 hover:text-white transition">PDF</button>
+            </div>
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}

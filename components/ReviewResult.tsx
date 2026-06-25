@@ -10,8 +10,10 @@ import {
   Play, 
   HelpCircle,
   FileCode,
-  ArrowRight
+  ArrowRight,
+  Download
 } from 'lucide-react';
+import { exportToJson, exportToMarkdown, exportToPdf } from '@/lib/export';
 import { RadialBarChart, RadialBar, ResponsiveContainer, PolarAngleAxis } from 'recharts';
 import { DiffEditor } from '@monaco-editor/react';
 
@@ -145,6 +147,11 @@ export default function ReviewResult({ review, originalCodeSnippet, language }: 
 
   return (
     <div id="review-result-container" className="space-y-8 animate-fade-in">
+      <div className="flex justify-end gap-2">
+        <button onClick={() => exportToJson(review, 'review')} className="text-xs text-slate-400 hover:text-white flex items-center gap-1"><Download className="h-3 w-3"/> JSON</button>
+        <button onClick={() => exportToMarkdown(review, 'review')} className="text-xs text-slate-400 hover:text-white flex items-center gap-1"><Download className="h-3 w-3"/> MD</button>
+        <button onClick={() => exportToPdf(review, 'review')} className="text-xs text-slate-400 hover:text-white flex items-center gap-1"><Download className="h-3 w-3"/> PDF</button>
+      </div>
       
       {/* 1. Scoreboards & Executive Summary Section */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
