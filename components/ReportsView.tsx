@@ -13,6 +13,7 @@ export default function ReportsView() {
   const fetchReports = async () => {
     if (!user) return;
     const supabase = getSupabase();
+    if (!supabase) return;
     const { data, error } = await supabase
       .from('reports')
       .select('*')
@@ -29,9 +30,11 @@ export default function ReportsView() {
 
   const handleGenerateReport = async (type: 'weekly' | 'monthly') => {
     if (!user) return;
+    const supabase = getSupabase();
+    if (!supabase) return;
     setLoading(true);
     // In a real app, I'd fetch filtered reviews here
-    const { data: reviews } = await getSupabase()
+    const { data: reviews } = await supabase
         .from('reviews')
         .select('*')
         .eq('user_id', user.id);

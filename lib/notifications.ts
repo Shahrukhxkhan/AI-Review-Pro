@@ -7,6 +7,7 @@ export const addNotification = async (
   type: Notification['type']
 ): Promise<void> => {
   const supabase = getSupabase();
+  if (!supabase) return;
   const { error } = await supabase.from('notifications').insert({
     user_id: userId,
     message,
@@ -17,5 +18,6 @@ export const addNotification = async (
 
 export const markAsRead = async (notificationId: string): Promise<void> => {
     const supabase = getSupabase();
+    if (!supabase) return;
     await supabase.from('notifications').update({ read: true }).eq('id', notificationId);
 };

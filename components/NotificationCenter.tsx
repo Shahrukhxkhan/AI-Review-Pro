@@ -14,6 +14,7 @@ export default function NotificationCenter() {
     if (!user) return;
     const fetchNotifications = async () => {
       const supabase = getSupabase();
+      if (!supabase) return;
       const { data } = await supabase
         .from('notifications')
         .select('*')

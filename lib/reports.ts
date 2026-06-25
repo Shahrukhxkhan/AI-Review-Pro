@@ -39,6 +39,7 @@ export const generateReport = async (
   };
 
   const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
   const { data, error } = await supabase.from('reports').insert(report).select().single();
   
   if (error) throw error;
