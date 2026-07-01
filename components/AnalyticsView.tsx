@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { CodeReview, DBUser } from '@/types';
 import { useChartData } from '@/hooks/useChartData';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell } from 'recharts';
+import ComparisonView from '@/components/ComparisonView';
 
 interface AnalyticsViewProps {
   reviews: CodeReview[];
@@ -99,6 +100,13 @@ export default function AnalyticsView({ reviews, currentUser }: AnalyticsViewPro
                 </div>
             ))}
         </div>
+        <div className="flex items-center gap-[12px] py-[24px]">
+            <div className="flex-1 h-[0.5px] bg-[#e0e5eb]"></div>
+            <div className="text-[10px] uppercase text-[#8a9ab0] tracking-wider">Period comparison</div>
+            <div className="flex-1 h-[0.5px] bg-[#e0e5eb]"></div>
+        </div>
+
+        <ComparisonView currentUser={currentUser} />
     </div>
   );
 }
