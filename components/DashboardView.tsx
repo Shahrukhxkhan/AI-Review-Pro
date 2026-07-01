@@ -8,8 +8,6 @@ import { useChartData } from '@/hooks/useChartData';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, BarChart, Bar, Cell } from 'recharts';
 
 interface DashboardViewProps {
-  reviews: CodeReview[];
-  streak: Streak;
   currentUser: DBUser | null;
   onGithubLogin: () => void;
   onLogout: () => void;
@@ -17,12 +15,15 @@ interface DashboardViewProps {
 }
 
 export default function DashboardView({ 
-  reviews = [], 
-  streak,
   currentUser,
+  onGithubLogin,
+  onLogout,
   onNavigateToTab 
 }: DashboardViewProps) {
-  const { scoreTrend, weeklyActivity, loading } = useChartData(currentUser?.id);
+  const { reviews } = useReviews(currentUser?.id);
+  const { streak } = useStreak(currentUser?.id);
+  const { loading } = useNotifications(currentUser?.id);
+  const { scoreTrend, weeklyActivity } = useChartData(reviews);
 
   // Stats calculation
   const stats = useMemo(() => {

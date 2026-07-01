@@ -9,8 +9,9 @@ interface AnalyticsViewProps {
   currentUser: DBUser | null;
 }
 
-export default function AnalyticsView({ reviews, currentUser }: AnalyticsViewProps) {
-  const { issueFrequency, dimensionAverages, loading } = useChartData(currentUser?.id);
+export default function AnalyticsView({ currentUser }: AnalyticsViewProps) {
+  const { reviews } = useReviews(currentUser?.id);
+  const { issueFrequency, dimensionAverages, loading } = useChartData(reviews);
 
   const metrics = useMemo(() => {
     if (reviews.length === 0) return { score: 0, readability: 0, security: 0, complexity: 0 };

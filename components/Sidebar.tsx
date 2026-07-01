@@ -6,20 +6,21 @@ import {
   TrendingUp, 
   Settings,
   LogOut,
-  FileText
+  FileText,
+  Flame
 } from 'lucide-react';
-import { DBUser, Streak } from '@/types';
+import { DBUser } from '@/types';
+import { useStreak } from '@/hooks/useStreak';
 
 interface SidebarProps {
   currentTab: string;
   setCurrentTab: (tab: string) => void;
-  isSupabaseConnected: boolean;
   currentUser: (DBUser & { avatar_url?: string; role?: string }) | null;
   onLogout: () => void;
-  streak?: Streak;
 }
 
 export default function Sidebar({ currentTab, setCurrentTab, currentUser, onLogout }: SidebarProps) {
+  const { streak } = useStreak(currentUser?.id);
 
   const mainNav = [
     { name: 'Dashboard', tab: 'dashboard', icon: LayoutDashboard },
@@ -44,6 +45,15 @@ export default function Sidebar({ currentTab, setCurrentTab, currentUser, onLogo
       {/* Navigation */}
       <div className="flex-1 px-3 py-6 space-y-8">
         <div>
+           {streak && (
+            <div className="bg-[#2d3a4d] rounded-lg p-3 mb-6 flex items-center gap-3">
+              <Flame className="w-5 h-5 text-[#BA7517]" />
+              <div>
+                <p className="text-[10px] text-[#8a9ab0] uppercase">Streak</p>
+                <p className="text-[14px] font-bold text-white">{streak.current_streak} days</p>
+              </div>
+            </div>
+           )}
           <h2 className="text-[10px] uppercase text-[#5a6a80] mb-3 px-2">Main</h2>
           <div className="space-y-1">
             {mainNav.map((item) => {

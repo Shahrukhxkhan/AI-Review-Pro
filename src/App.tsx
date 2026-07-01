@@ -8,6 +8,8 @@ import NewReviewPage from '@/app/new-review/page';
 import HistoryPage from '@/app/history/page';
 import SettingsPage from '@/app/settings/page';
 import LoginPage from '@/app/login/page';
+import { ToastProvider } from './context/ToastContext';
+import RealtimeStatus from './components/RealtimeStatus';
 
 import { CodeReview, Streak, DBUser } from '@/types';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
@@ -30,7 +32,14 @@ export default function App() {
   
   const isSupabaseConnected = isSupabaseConfigured();
   const supabase = getSupabase();
-  const { user: currentUser, loading: isUserLoading, signOut: handleLogout } = useUser();
+  const { user: currentUser, loading: isUserLoading, signOut } = useUser();
+
+  const handleLogout = async () => {
+    if (supabase) {
+      await supabase.removeAllChannels();
+    }
+    await signOut();
+  };
 
   // Sync tab and review selections with URL pathname
   useEffect(() => {
@@ -361,91 +370,92 @@ export default function App() {
   }
 
   return (
-    <div id="app-root" className="flex min-h-screen bg-[#f4f6f8] text-[#1a2332] font-sans">
-      
-      {/* Sidebar */}
-      <Sidebar 
-        currentTab={currentTab} 
-        setCurrentTab={changeTab} 
-        isSupabaseConnected={isSupabaseConnected} 
-        currentUser={currentUser}
-        onLogout={handleLogout}
-        streak={streak}
-      />
-
-      {/* Main Content Area */}
-      <div className="flex-1 ml-[200px] flex flex-col">
-        {/* Topbar */}
-        <header className="h-[60px] bg-[#ffffff] border-b border-[#e0e5eb] flex items-center justify-between px-6">
-          <div>
-            <h1 className="text-[14px] font-medium text-[#1a2332] capitalize">{currentTab.replace('-', ' ')}</h1>
-            <p className="text-[11px] text-[#8a9ab0]">{new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
+    <ToastProvider>
+        <div id="app-root" className="flex min-h-screen bg-[#f4f6f8] text-[#1a2332] font-sans">
+          
+          {/* Sidebar */}
+          <Sidebar 
+            currentTab={currentTab} 
+            setCurrentTab={changeTab} 
+            isSupabaseConnected={isSupabaseConnected} 
+            currentUser={currentUser}
+            onLogout={handleLogout}
+            streak={streak}
+          />
+    
+          {/* Main Content Area */}
+          <div className="flex-1 ml-[200px] flex flex-col">
+            {/* Topbar */}
+            <header className="h-[60px] bg-[#ffffff] border-b border-[#e0e5eb] flex items-center justify-between px-6">
+              <div>
+                <h1 className="text-[14px] font-medium text-[#1a2332] capitalize">{currentTab.replace('-', ' ')}</h1>
+                <p className="text-[11px] text-[#8a9ab0]">{new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
+              </div>
+              <div className="flex items-center gap-4">
+                  <RealtimeStatus userId={currentUser?.id} />
+                  <NotificationCenter />
+                  <button 
+                    onClick={() => changeTab('new-review')}
+                    className="flex items-center gap-1 bg-[#1D9E75] text-[#ffffff] text-[11px] font-medium px-3 py-1.5 rounded-lg"
+                  >
+                    <Plus className="w-[13px] h-[13px]" />
+                    New review
+                  </button>
+              </div>
+            </header>
+    
+            {/* Content */}
+            <main id="main-content" className="flex-1 overflow-y-auto p-[20px_22px]">
+              {isPending ? (
+                <div className="flex items-center justify-center h-full">Loading...</div>
+              ) : (
+                <>
+                  {currentTab === 'dashboard' && (
+                    <DashboardPage 
+                      currentUser={currentUser}
+                      onGithubLogin={handleGithubLogin}
+                      onLogout={handleLogout}
+                      onNavigateToTab={changeTab} 
+                    />
+                  )}
+                  
+                  {currentTab === 'progress' && (
+                    <AnalyticsPage currentUser={currentUser} />
+                  )}
+                  
+                  {currentTab === 'reports' && (
+                    <ReportsPage />
+                  )}
+                  
+                  {currentTab === 'new-review' && (
+                    <NewReviewPage onAddReview={handleAddReview} />
+                  )}
+    
+                  {currentTab === 'history' && (
+                    <HistoryPage 
+                      reviews={reviews} 
+                      onDeleteReview={handleDeleteReview} 
+                      selectedReviewId={selectedReviewId}
+                      onSelectReviewId={handleSelectReviewId}
+                    />
+                  )}
+    
+                  {currentTab === 'settings' && (
+                    <SettingsPage 
+                      currentUser={currentUser}
+                      streak={streak}
+                      onResetToSeed={handleResetToSeed} 
+                      onClearAll={handleClearAll} 
+                      onGithubLogin={handleGithubLogin}
+                      onLogout={handleLogout}
+                      isSupabaseConnected={isSupabaseConnected} 
+                    />
+                  )}
+                </>
+              )}
+            </main>
           </div>
-          <div className="flex items-center gap-4">
-              <NotificationCenter />
-              <button 
-                onClick={() => changeTab('new-review')}
-                className="flex items-center gap-1 bg-[#1D9E75] text-[#ffffff] text-[11px] font-medium px-3 py-1.5 rounded-lg"
-              >
-                <Plus className="w-[13px] h-[13px]" />
-                New review
-              </button>
-          </div>
-        </header>
-
-        {/* Content */}
-        <main id="main-content" className="flex-1 overflow-y-auto p-[20px_22px]">
-          {isPending ? (
-            <div className="flex items-center justify-center h-full">Loading...</div>
-          ) : (
-            <>
-              {currentTab === 'dashboard' && (
-                <DashboardPage 
-                  reviews={reviews} 
-                  streak={streak}
-                  currentUser={currentUser}
-                  onGithubLogin={handleGithubLogin}
-                  onLogout={handleLogout}
-                  onNavigateToTab={changeTab} 
-                />
-              )}
-              
-              {currentTab === 'progress' && (
-                <AnalyticsPage reviews={reviews} currentUser={currentUser} />
-              )}
-              
-              {currentTab === 'reports' && (
-                <ReportsPage />
-              )}
-              
-              {currentTab === 'new-review' && (
-                <NewReviewPage onAddReview={handleAddReview} />
-              )}
-
-              {currentTab === 'history' && (
-                <HistoryPage 
-                  reviews={reviews} 
-                  onDeleteReview={handleDeleteReview} 
-                  selectedReviewId={selectedReviewId}
-                  onSelectReviewId={handleSelectReviewId}
-                />
-              )}
-
-              {currentTab === 'settings' && (
-                <SettingsPage 
-                  currentUser={currentUser}
-                  streak={streak}
-                  onResetToSeed={handleResetToSeed} 
-                  onClearAll={handleClearAll} 
-                  onGithubLogin={handleGithubLogin}
-                  onLogout={handleLogout}
-                  isSupabaseConnected={isSupabaseConnected} 
-                />
-              )}
-            </>
-          )}
-        </main>
-      </div>
-    </div>
+        </div>
+    </ToastProvider>
   );
 }

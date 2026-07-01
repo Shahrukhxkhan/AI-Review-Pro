@@ -7,25 +7,11 @@ import { FileText, Plus } from 'lucide-react';
 
 export default function ReportsView() {
   const { user } = useUser();
-  const [reports, setReports] = useState<Report[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const fetchReports = async () => {
-    if (!user) return;
-    const supabase = getSupabase();
-    if (!supabase) return;
-    const { data, error } = await supabase
-      .from('reports')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false });
-    
-    if (data) setReports(data);
-    setLoading(false);
-  };
+  const { reports, isLoading } = useReports(user?.id);
+  const [loading, setLoading] = useState(false); // keep loading for generation
 
   useEffect(() => {
-    fetchReports();
+    //
   }, [user]);
 
   const handleGenerateReport = async (type: 'weekly' | 'monthly') => {

@@ -1,35 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Bell, Check } from 'lucide-react';
-import { Notification } from '@/types';
-import { getSupabase } from '@/lib/supabase';
-import { markAsRead } from '@/lib/notifications';
+import { useNotifications } from '@/hooks/useNotifications';
 import { useUser } from '@/hooks/useUser';
 
 export default function NotificationCenter() {
   const { user } = useUser();
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const { notifications, unreadCount, markAsRead } = useNotifications(user?.id);
   const [isOpen, setIsOpen] = useState(false);
-
-  useEffect(() => {
-    if (!user) return;
-    const fetchNotifications = async () => {
-      const supabase = getSupabase();
-      if (!supabase) return;
-      const { data } = await supabase
-        .from('notifications')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
-      if (data) setNotifications(data);
-    };
-    fetchNotifications();
-  }, [user]);
-
-  const unreadCount = notifications.filter(n => !n.read).length;
 
   return (
     <div className="relative">
-      <button onClick={() => setIsOpen(!isOpen)} className="p-2 bg-white rounded-full relative">
+      <style>{`
+        @keyframes pulse { 0%, 100% { transform: scale(1); color: #475569; } 50% { transform: scale(1.2); color: #1D9E75; } }
+        .bell-pulse { animation: pulse 0.4s ease-in-out; }
+      `}</style>
+      <button id="notification-bell" onClick={() => setIsOpen(!isOpen)} className="p-2 bg-white rounded-full relative">
         <Bell className="w-5 h-5 text-slate-600" />
         {unreadCount > 0 && (
           <span className="absolute top-0 right-0 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold">
