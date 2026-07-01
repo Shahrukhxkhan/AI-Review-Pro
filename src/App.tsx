@@ -411,7 +411,7 @@ export default function App() {
               )}
               
               {currentTab === 'progress' && (
-                <AnalyticsPage reviews={reviews} />
+                <AnalyticsPage reviews={reviews} currentUser={currentUser} />
               )}
               
               {currentTab === 'reports' && (

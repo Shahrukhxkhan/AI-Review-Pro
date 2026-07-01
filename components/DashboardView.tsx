@@ -1,14 +1,11 @@
 import React, { useMemo } from 'react';
 import { 
   Plus,
-  Code2,
-  Bug,
-  ShieldCheck,
-  BookOpen,
-  Terminal
 } from 'lucide-react';
 import { CodeReview, Streak, DBUser } from '@/types';
 import { formatDate } from '@/lib/utils';
+import { useChartData } from '@/hooks/useChartData';
+import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, BarChart, Bar, Cell } from 'recharts';
 
 interface DashboardViewProps {
   reviews: CodeReview[];
@@ -22,48 +19,27 @@ interface DashboardViewProps {
 export default function DashboardView({ 
   reviews = [], 
   streak,
+  currentUser,
   onNavigateToTab 
 }: DashboardViewProps) {
+  const { scoreTrend, weeklyActivity, loading } = useChartData(currentUser?.id);
 
   // Stats calculation
   const stats = useMemo(() => {
     const totalReviews = reviews.length;
     const avgScore = totalReviews > 0 ? reviews.reduce((sum, r) => sum + r.overall_score, 0) / totalReviews : 0;
-    const topIssue = 'Best Practices'; // Simplified for now as per design spec needs
+    const topIssue = 'Best Practices';
 
     return { totalReviews, avgScore, currentStreak: streak?.current_streak || 0, topIssue };
   }, [reviews, streak]);
 
-  // Chart data
-  const chartData = useMemo(() => {
-    const last8 = reviews.slice(-8);
-    const maxScore = 100;
-    return last8.map(r => ({
-        score: r.overall_score,
-        height: (r.overall_score / maxScore) * 100,
-        color: r.overall_score >= 75 ? '#1D9E75' : r.overall_score >= 50 ? '#BA7517' : '#993C1D'
-    }));
-  }, [reviews]);
-
-  // Quality Breakdown
-  const qualityBreakdown = useMemo(() => {
-    const total = reviews.length;
-    if (total === 0) return { readability: 0, complexity: 0, bug: 0, security: 0 };
-    
-    const sum = reviews.reduce((acc, r) => ({
-        readability: acc.readability + r.readability_score,
-        complexity: acc.complexity + r.complexity_score,
-        bug: acc.bug + r.bug_score,
-        security: acc.security + r.security_score,
-    }), { readability: 0, complexity: 0, bug: 0, security: 0 });
-
-    return {
-        readability: Math.round(sum.readability / total),
-        complexity: Math.round(sum.complexity / total),
-        bug: Math.round(sum.bug / total),
-        security: Math.round(sum.security / total),
-    };
-  }, [reviews]);
+  const EmptyState = () => (
+    <div className="flex flex-col items-center justify-center h-full text-center p-4">
+      <div className="text-[#b0bcc8] mb-2"><span className="text-[28px]">📊</span></div>
+      <div className="text-[13px] font-medium text-[#8a9ab0]">No data yet</div>
+      <div className="text-[11px] text-[#b0bcc8]">Complete your first review to see insights</div>
+    </div>
+  );
 
   return (
     <div className="space-y-[16px]">
@@ -86,39 +62,47 @@ export default function DashboardView({
         {/* Charts Row */}
         <div className="grid grid-cols-2 gap-[12px]">
             {/* Score Trend */}
-            <div className="bg-[#ffffff] border-[0.5px] border-[#e0e5eb] rounded-[12px] p-[16px]">
-                <div className="text-[12px] font-medium text-[#1a2332]">Score trend</div>
-                <div className="text-[10px] text-[#b0bcc8] mb-[12px]">Last 8 reviews</div>
-                <div className="flex items-end gap-[4px] h-[68px]">
-                    {chartData.map((d, i) => (
-                        <div key={i} className="flex-1 flex flex-col items-center gap-[4px]">
-                            <div className="w-full rounded-[2px_2px_0_0]" style={{ height: `${d.height}%`, backgroundColor: d.color }}></div>
-                            <div className="text-[9px] text-[#b0bcc8]">{i + 1}</div>
-                        </div>
-                    ))}
-                </div>
+            <div className="bg-[#ffffff] border-[0.5px] border-[#e0e5eb] rounded-[12px] p-[16px] h-[248px]">
+                <div className="text-[12px] font-medium text-[#1a2332] mb-[12px]">Score trend</div>
+                {loading ? (
+                    <div className="w-full h-[200px] bg-[#f4f6f8] rounded-[8px]"></div>
+                ) : scoreTrend.length < 2 ? (
+                    <div className="flex items-center justify-center h-[200px] text-[12px] text-[#8a9ab0]">Complete at least 2 reviews to see your trend</div>
+                ) : (
+                    <ResponsiveContainer width="100%" height={200}>
+                        <LineChart data={scoreTrend}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#e0e5eb" vertical={false} />
+                            <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#8a9ab0' }} axisLine={false} tickLine={false} />
+                            <YAxis domain={[0, 100]} ticks={[0, 25, 50, 75, 100]} tick={{ fontSize: 11, fill: '#8a9ab0' }} axisLine={false} tickLine={false} width={28} />
+                            <Tooltip contentStyle={{ backgroundColor: '#1e2735', color: '#e8edf3', border: 'none', borderRadius: '8px', fontSize: '12px' }} />
+                            <Line type="monotone" dataKey="score" stroke="#1D9E75" strokeWidth={2} dot={{ fill: '#1D9E75', r: 3, strokeWidth: 0 }} activeDot={{ r: 5, fill: '#1D9E75', strokeWidth: 0 }} />
+                        </LineChart>
+                    </ResponsiveContainer>
+                )}
             </div>
 
-            {/* Quality Breakdown */}
-            <div className="bg-[#ffffff] border-[0.5px] border-[#e0e5eb] rounded-[12px] p-[16px]">
-                <div className="text-[12px] font-medium text-[#1a2332]">Quality breakdown</div>
-                <div className="text-[10px] text-[#b0bcc8] mb-[12px]">Average scores</div>
-                <div className="space-y-[8px]">
-                    {[
-                        { label: 'Readability', score: qualityBreakdown.readability, color: '#1D9E75' },
-                        { label: 'Complexity', score: qualityBreakdown.complexity, color: '#1D9E75' },
-                        { label: 'Bug risk', score: qualityBreakdown.bug, color: '#BA7517' },
-                        { label: 'Security', score: qualityBreakdown.security, color: '#993C1D' },
-                    ].map(q => (
-                        <div key={q.label} className="flex items-center gap-[8px]">
-                            <div className="text-[11px] text-[#5a6a80] w-[76px]">{q.label}</div>
-                            <div className="flex-1 h-[3px] bg-[#e0e5eb] rounded-[2px] overflow-hidden">
-                                <div className="h-full rounded-[2px]" style={{ width: `${q.score}%`, backgroundColor: q.color }}></div>
-                            </div>
-                            <div className="text-[11px] font-medium text-[#1a2332] w-[26px] text-right">{q.score}</div>
-                        </div>
-                    ))}
-                </div>
+            {/* Weekly Activity */}
+            <div className="bg-[#ffffff] border-[0.5px] border-[#e0e5eb] rounded-[12px] p-[16px] h-[248px]">
+                <div className="text-[12px] font-medium text-[#1a2332] mb-[12px]">Weekly activity</div>
+                {loading ? (
+                    <div className="w-full h-[200px] bg-[#f4f6f8] rounded-[8px]"></div>
+                ) : weeklyActivity.length === 0 || weeklyActivity.every(d => d.count === 0) ? (
+                    <EmptyState />
+                ) : (
+                    <ResponsiveContainer width="100%" height={200}>
+                        <BarChart data={weeklyActivity} barSize={20}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#e0e5eb" vertical={false} />
+                            <XAxis dataKey="week" tick={{ fontSize: 11, fill: '#8a9ab0' }} axisLine={false} tickLine={false} />
+                            <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#8a9ab0' }} axisLine={false} tickLine={false} width={24} />
+                            <Tooltip contentStyle={{ backgroundColor: '#1e2735', color: '#e8edf3', border: 'none', borderRadius: '8px', fontSize: '12px' }} />
+                            <Bar dataKey="count" radius={[3, 3, 0, 0]}>
+                                {weeklyActivity.map((entry, index) => (
+                                    <Cell key={index} fill={index === weeklyActivity.length - 1 ? "#0F6E56" : "#1D9E75"} />
+                                ))}
+                            </Bar>
+                        </BarChart>
+                    </ResponsiveContainer>
+                )}
             </div>
         </div>
 
