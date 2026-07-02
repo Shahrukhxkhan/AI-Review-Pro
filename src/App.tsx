@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useTransition } from 'react';
 import Sidebar from '@/components/Sidebar';
-import DashboardPage from '@/components/DashboardView'; // Updated path
+import DashboardPage from '@/components/DashboardView'; 
 import AnalyticsPage from '@/components/AnalyticsView';
 import ReportsPage from '@/components/ReportsView';
 import NotificationCenter from '@/components/NotificationCenter';
@@ -8,8 +8,8 @@ import NewReviewPage from '@/app/new-review/page';
 import HistoryPage from '@/app/history/page';
 import SettingsPage from '@/app/settings/page';
 import LoginPage from '@/app/login/page';
-import { ToastProvider } from './context/ToastContext';
-import RealtimeStatus from './components/RealtimeStatus';
+import { ToastProvider } from '@/context/ToastContext';
+import RealtimeStatus from '@/components/RealtimeStatus';
 
 import { CodeReview, Streak, DBUser } from '@/types';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';

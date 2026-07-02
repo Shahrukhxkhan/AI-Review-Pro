@@ -48,10 +48,3 @@ export const useRealtimeStatus = (userId: string | undefined) => {
 
   return { status };
 };
-
-export default function RealtimeStatus({ userId }: { userId: string | undefined }) {
-  const { status } = useRealtimeStatus(userId);
-  return (
-    <div className={`w-2 h-2 rounded-full ${status === 'connected' ? 'bg-green-500' : 'bg-red-500'}`} />
-  );
-}
