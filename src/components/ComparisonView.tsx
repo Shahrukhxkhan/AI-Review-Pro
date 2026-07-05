@@ -16,12 +16,14 @@ export default function ComparisonView({ currentUser }: ComparisonViewProps) {
   const [periodA, setPeriodA] = useState('Last week');
   const [periodB, setPeriodB] = useState('This week');
   const [data, setData] = useState<{ a: PeriodData | null, b: PeriodData | null }>({ a: null, b: null });
+  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!currentUser) return;
     const fetchData = async () => {
       setLoading(true);
+      setError(null);
       const rangeA = getDateRange(periodA);
       const rangeB = getDateRange(periodB);
       
@@ -31,8 +33,9 @@ export default function ComparisonView({ currentUser }: ComparisonViewProps) {
           fetchPeriodData(currentUser.id, rangeB.start, rangeB.end)
         ]);
         setData({ a: resA, b: resB });
-      } catch (e) {
+      } catch (e: any) {
         console.error('Error fetching period data:', e);
+        setError(e.message || 'An error occurred');
       } finally {
         setLoading(false);
       }
@@ -96,6 +99,12 @@ export default function ComparisonView({ currentUser }: ComparisonViewProps) {
         {periodA === periodB && (
             <div className="flex gap-2 items-center text-[11px] text-[#BA7517] mb-4">
                 <AlertTriangle className="w-3.5 h-3.5" /> Both periods are the same — select different periods to compare
+            </div>
+        )}
+
+        {error && (
+            <div className="flex gap-2 items-center text-[11px] text-[#993C1D] mb-4 bg-[#FDE8E8] p-2 rounded">
+                <AlertTriangle className="w-3.5 h-3.5" /> Error: {error}
             </div>
         )}
 
