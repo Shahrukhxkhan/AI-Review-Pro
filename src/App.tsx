@@ -415,7 +415,9 @@ export default function App() {
                       currentUser={currentUser}
                       onGithubLogin={handleGithubLogin}
                       onLogout={handleLogout}
-                      onNavigateToTab={changeTab} 
+                      onNavigateToTab={changeTab}
+                      reviews={reviews}
+                      streak={streak}
                     />
                   )}
                   

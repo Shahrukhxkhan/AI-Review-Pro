@@ -25,7 +25,7 @@ export default function DashboardView({
         <h1 className="text-2xl font-bold">Dashboard</h1>
         <p>Welcome, {currentUser?.email || 'User'}</p>
       </div>
-      <AnalyticsView reviews={reviews} currentUser={currentUser} />
+      <AnalyticsView reviews={reviews || []} currentUser={currentUser} />
     </div>
   );
 }

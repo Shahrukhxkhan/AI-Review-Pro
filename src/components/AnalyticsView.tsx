@@ -12,7 +12,7 @@ interface AnalyticsViewProps {
 
 export default function AnalyticsView({ currentUser, reviews }: AnalyticsViewProps) {
   const { reviews: fetchedReviews } = useReviews(currentUser?.id);
-  const activeReviews = reviews.length > 0 ? reviews : fetchedReviews;
+  const activeReviews = (reviews && reviews.length > 0) ? reviews : fetchedReviews;
   const { issueFrequency, dimensionAverages, loading } = useChartData(activeReviews);
 
   const metrics = useMemo(() => {
