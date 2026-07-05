@@ -22,7 +22,7 @@ import { formatDate } from '@/lib/utils';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 import { useUser } from '@/hooks/useUser';
 import ReviewResult from './ReviewResult';
-import { exportToJson, exportToMarkdown, exportToPdf } from '@/lib/export';
+import { exportToJson, exportToMarkdown, exportToPdf, exportToCsv } from '@/lib/export';
 
 interface HistoryViewProps {
   reviews?: CodeReview[];
@@ -282,6 +282,7 @@ export default function HistoryView({
               <button onClick={() => exportToJson(filteredReviews, 'history')} className="text-[10px] font-bold text-slate-400 hover:text-white transition">JSON</button>
               <button onClick={() => exportToMarkdown(filteredReviews, 'history')} className="text-[10px] font-bold text-slate-400 hover:text-white transition">MD</button>
               <button onClick={() => exportToPdf(filteredReviews, 'history')} className="text-[10px] font-bold text-slate-400 hover:text-white transition">PDF</button>
+              <button onClick={() => exportToCsv(filteredReviews, 'history')} className="text-[10px] font-bold text-slate-400 hover:text-white transition">CSV</button>
             </div>
             <select
               value={sortBy}

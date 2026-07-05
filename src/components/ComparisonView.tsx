@@ -4,6 +4,7 @@ import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tool
 import { AlertTriangle } from 'lucide-react';
 import { getDateRange } from '@/lib/dateUtils';
 import { fetchPeriodData, PeriodData } from '@/lib/periodData';
+import { isSupabaseConfigured } from '@/lib/supabase';
 import { DBUser } from '@/types';
 
 interface ComparisonViewProps {
@@ -22,6 +23,11 @@ export default function ComparisonView({ currentUser }: ComparisonViewProps) {
   useEffect(() => {
     if (!currentUser) return;
     const fetchData = async () => {
+      if (!isSupabaseConfigured()) {
+        setError('Supabase is not configured. Please check your environment variables.');
+        setLoading(false);
+        return;
+      }
       setLoading(true);
       setError(null);
       const rangeA = getDateRange(periodA);

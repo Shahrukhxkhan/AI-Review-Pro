@@ -30,7 +30,6 @@ export const exportToMarkdown = (data: CodeReview | CodeReview[], filename: stri
   a.click();
   URL.revokeObjectURL(url);
 };
-
 export const exportToPdf = (data: CodeReview | CodeReview[], filename: string) => {
   const reviews = Array.isArray(data) ? data : [data];
   const doc = new jsPDF();
@@ -49,4 +48,34 @@ export const exportToPdf = (data: CodeReview | CodeReview[], filename: string) =
   });
   
   doc.save(`${filename}.pdf`);
+};
+
+export const exportToCsv = (data: CodeReview | CodeReview[], filename: string) => {
+  const reviews = Array.isArray(data) ? data : [data];
+  const headers = ['ID', 'Language', 'Overall Score', 'Bug Score', 'Security Score', 'Readability Score', 'Complexity Score', 'Created At', 'Summary'];
+  
+  const csvRows = [headers.join(',')];
+  
+  reviews.forEach(r => {
+    const row = [
+      r.id,
+      r.language,
+      r.overall_score,
+      r.bug_score,
+      r.security_score,
+      r.readability_score,
+      r.complexity_score,
+      r.created_at,
+      `"${(r.feedback.summary || '').replace(/"/g, '""')}"`
+    ];
+    csvRows.push(row.join(','));
+  });
+  
+  const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${filename}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 };
