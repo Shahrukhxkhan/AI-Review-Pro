@@ -371,41 +371,38 @@ export default function App() {
 
   return (
     <ToastProvider>
-        <div id="app-root" className="flex min-h-screen bg-[#f4f6f8] text-[#1a2332] font-sans">
+        <div id="app-root" className="grid grid-cols-[260px_1fr] min-h-screen bg-bg text-ink font-sans">
           
           {/* Sidebar */}
           <Sidebar 
             currentTab={currentTab} 
             setCurrentTab={changeTab} 
-            isSupabaseConnected={isSupabaseConnected} 
             currentUser={currentUser}
             onLogout={handleLogout}
-            streak={streak}
           />
     
           {/* Main Content Area */}
-          <div className="flex-1 ml-[200px] flex flex-col">
+          <div className="flex flex-col bg-[radial-gradient(circle_at_top_right,rgba(0,255,170,0.05),transparent_40%)]">
             {/* Topbar */}
-            <header className="h-[60px] bg-[#ffffff] border-b border-[#e0e5eb] flex items-center justify-between px-6">
-              <div>
-                <h1 className="text-[14px] font-medium text-[#1a2332] capitalize">{currentTab.replace('-', ' ')}</h1>
-                <p className="text-[11px] text-[#8a9ab0]">{new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
+            <header className="h-[120px] flex items-end justify-between px-12 pb-8">
+              <div className="header-title">
+                <p className="font-mono text-[12px] opacity-50">{new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })} // GH_AUTH_CONNECTED</p>
+                <h1 className="font-display text-[48px] tracking-tighter">{currentTab.replace('-', ' ')}</h1>
               </div>
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-6 pb-2">
                   <RealtimeStatus userId={currentUser?.id} />
                   <NotificationCenter />
                   <button 
                     onClick={() => changeTab('new-review')}
-                    className="flex items-center gap-1 bg-[#1D9E75] text-[#ffffff] text-[11px] font-medium px-3 py-1.5 rounded-lg"
+                    className="bg-accent text-bg px-5 py-3 rounded text-[12px] font-bold uppercase tracking-wider hover:opacity-90"
                   >
-                    <Plus className="w-[13px] h-[13px]" />
-                    New review
+                    + New Review
                   </button>
               </div>
             </header>
     
             {/* Content */}
-            <main id="main-content" className="flex-1 overflow-y-auto p-[20px_22px]">
+            <main id="main-content" className="flex-1 overflow-y-auto px-12 pb-12">
               {isPending ? (
                 <div className="flex items-center justify-center h-full">Loading...</div>
               ) : (
@@ -422,7 +419,7 @@ export default function App() {
                   )}
                   
                   {currentTab === 'progress' && (
-                    <AnalyticsPage currentUser={currentUser} />
+                    <AnalyticsPage currentUser={currentUser} reviews={reviews} />
                   )}
                   
                   {currentTab === 'reports' && (

@@ -6,11 +6,9 @@ import {
   TrendingUp, 
   Settings,
   LogOut,
-  FileText,
-  Flame
+  FileText
 } from 'lucide-react';
 import { DBUser } from '@/types';
-import { useStreak } from '@/hooks/useStreak';
 
 interface SidebarProps {
   currentTab: string;
@@ -20,7 +18,6 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ currentTab, setCurrentTab, currentUser, onLogout }: SidebarProps) {
-  const { streak } = useStreak(currentUser?.id);
 
   const mainNav = [
     { name: 'Dashboard', tab: 'dashboard', icon: LayoutDashboard },
@@ -35,27 +32,15 @@ export default function Sidebar({ currentTab, setCurrentTab, currentUser, onLogo
   ];
 
   return (
-    <div className="fixed top-0 left-0 h-screen w-[200px] bg-[#1e2735] flex flex-col z-50">
-      {/* Header */}
-      <div className="p-4 border-b border-[#2d3a4d]">
-        <h1 className="text-[13px] font-medium text-[#e8edf3]">AI-Review Pro</h1>
-        <p className="text-[10px] uppercase text-[#5a6a80] mt-0.5">Code intelligence</p>
-      </div>
-
-      {/* Navigation */}
-      <div className="flex-1 px-3 py-6 space-y-8">
-        <div>
-           {streak && (
-            <div className="bg-[#2d3a4d] rounded-lg p-3 mb-6 flex items-center gap-3">
-              <Flame className="w-5 h-5 text-[#BA7517]" />
-              <div>
-                <p className="text-[10px] text-[#8a9ab0] uppercase">Streak</p>
-                <p className="text-[14px] font-bold text-white">{streak.current_streak} days</p>
-              </div>
-            </div>
-           )}
-          <h2 className="text-[10px] uppercase text-[#5a6a80] mb-3 px-2">Main</h2>
-          <div className="space-y-1">
+    <aside className="bg-bg border-r border-ink-faint flex flex-col p-8 justify-between">
+      <div className="top-sec">
+        <div className="brand">
+          <h1 className="font-display text-xl tracking-tight text-accent uppercase">AI-Review Pro</h1>
+          <p className="font-mono text-[10px] uppercase tracking-widest opacity-50 mt-1">Code Intelligence [v2.4]</p>
+        </div>
+        <nav className="mt-12 flex-1">
+          <span className="font-mono text-[10px] uppercase tracking-widest opacity-30 mb-4 block">01 // System</span>
+          <div className="space-y-2">
             {mainNav.map((item) => {
               const Icon = item.icon;
               const isActive = currentTab === item.tab;
@@ -63,21 +48,19 @@ export default function Sidebar({ currentTab, setCurrentTab, currentUser, onLogo
                 <button
                   key={item.name}
                   onClick={() => setCurrentTab(item.tab)}
-                  className={`flex items-center gap-2 w-full px-2 py-2 rounded-lg text-[12px] font-medium transition ${
-                    isActive ? 'bg-[#1D9E75] text-[#ffffff]' : 'text-[#7a8fa8] hover:text-[#ffffff] hover:bg-[#2d3a4d]'
+                  className={`flex items-center gap-3 w-full py-3 text-[14px] transition ${
+                    isActive ? 'text-accent opacity-100' : 'text-ink opacity-60 hover:opacity-100'
                   }`}
                 >
-                  <Icon className="w-[15px] h-[15px]" />
+                  <Icon className="w-4 h-4" />
                   {item.name}
                 </button>
               );
             })}
           </div>
-        </div>
-
-        <div>
-          <h2 className="text-[10px] uppercase text-[#5a6a80] mb-3 px-2">Analytics</h2>
-          <div className="space-y-1">
+          
+          <span className="font-mono text-[10px] uppercase tracking-widest opacity-30 mt-8 mb-4 block">02 // Analytics</span>
+          <div className="space-y-2">
             {analyticsNav.map((item) => {
               const Icon = item.icon;
               const isActive = currentTab === item.tab;
@@ -85,37 +68,34 @@ export default function Sidebar({ currentTab, setCurrentTab, currentUser, onLogo
                 <button
                   key={item.name}
                   onClick={() => setCurrentTab(item.tab)}
-                  className={`flex items-center gap-2 w-full px-2 py-2 rounded-lg text-[12px] font-medium transition ${
-                    isActive ? 'bg-[#1D9E75] text-[#ffffff]' : 'text-[#7a8fa8] hover:text-[#ffffff] hover:bg-[#2d3a4d]'
+                  className={`flex items-center gap-3 w-full py-3 text-[14px] transition ${
+                    isActive ? 'text-accent opacity-100' : 'text-ink opacity-60 hover:opacity-100'
                   }`}
                 >
-                  <Icon className="w-[15px] h-[15px]" />
+                  <Icon className="w-4 h-4" />
                   {item.name}
                 </button>
               );
             })}
           </div>
-        </div>
+        </nav>
       </div>
-
-      {/* Footer */}
+      
       {currentUser && (
-        <div className="p-4 border-t border-[#2d3a4d]">
-          <div className="flex items-center gap-3">
-            <div className="w-[26px] h-[26px] rounded-full bg-[#1D9E75] flex items-center justify-center text-[9px] font-medium text-white">
-              {currentUser.github_username?.substring(0, 2).toUpperCase()}
-            </div>
-            <div className="flex-1 overflow-hidden">
-              <p className="text-[11px] font-medium text-[#c8d4e0] truncate">Shahrukh</p>
-              <p className="text-[10px] text-[#5a6a80] truncate">@{currentUser.github_username}</p>
-            </div>
-            <button onClick={onLogout} className="text-[#7a8fa8] hover:text-white">
-              <LogOut className="w-[15px] h-[15px]" />
-            </button>
+        <div className="pt-8 border-t border-ink-faint flex items-center gap-3">
+          <div className="w-8 h-8 rounded bg-accent flex items-center justify-center text-[12px] font-bold text-bg">
+            {currentUser.github_username?.substring(0, 2).toUpperCase()}
           </div>
+          <div className="flex-1 overflow-hidden">
+            <p className="text-[12px] font-semibold text-ink">Shahrukh</p>
+            <p className="text-[10px] font-mono text-ink opacity-50 truncate">@{currentUser.github_username}</p>
+          </div>
+          <button onClick={onLogout} className="text-ink opacity-60 hover:opacity-100">
+            <LogOut className="w-4 h-4" />
+          </button>
         </div>
       )}
-    </div>
+    </aside>
   );
 }
 
