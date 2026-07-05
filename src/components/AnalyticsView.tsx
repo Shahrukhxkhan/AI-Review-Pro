@@ -10,35 +10,36 @@ interface AnalyticsViewProps {
   currentUser: DBUser | null;
 }
 
-export default function AnalyticsView({ currentUser }: AnalyticsViewProps) {
-  const { reviews } = useReviews(currentUser?.id);
-  const { issueFrequency, dimensionAverages, loading } = useChartData(reviews);
+export default function AnalyticsView({ currentUser, reviews }: AnalyticsViewProps) {
+  const { reviews: fetchedReviews } = useReviews(currentUser?.id);
+  const activeReviews = reviews.length > 0 ? reviews : fetchedReviews;
+  const { issueFrequency, dimensionAverages, loading } = useChartData(activeReviews);
 
   const metrics = useMemo(() => {
-    if (reviews.length === 0) return { score: 0, readability: 0, security: 0, complexity: 0 };
-    const sum = reviews.reduce((acc, r) => ({
+    if (activeReviews.length === 0) return { score: 0, readability: 0, security: 0, complexity: 0 };
+    const sum = activeReviews.reduce((acc, r) => ({
       score: acc.score + r.overall_score,
       readability: acc.readability + r.readability_score,
       security: acc.security + r.security_score,
       complexity: acc.complexity + r.complexity_score,
     }), { score: 0, readability: 0, security: 0, complexity: 0 });
-    const count = reviews.length;
+    const count = activeReviews.length;
     return {
       score: Math.round(sum.score / count),
       readability: Math.round(sum.readability / count),
       security: Math.round(sum.security / count),
       complexity: Math.round(sum.complexity / count),
     };
-  }, [reviews]);
+  }, [activeReviews]);
 
   const progressData = useMemo(() => {
-    return [...reviews]
+    return [...activeReviews]
       .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
       .map(r => ({
         date: new Date(r.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
         score: r.overall_score
       }));
-  }, [reviews]);
+  }, [activeReviews]);
 
   return (
     <div className="space-y-[16px]">
