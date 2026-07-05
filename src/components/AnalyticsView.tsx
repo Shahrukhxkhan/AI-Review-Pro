@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { CodeReview, DBUser } from '@/types';
 import { useChartData } from '@/hooks/useChartData';
 import { useReviews } from '@/hooks/useReviews';
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell } from 'recharts';
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell, LineChart, Line } from 'recharts';
 import ComparisonView from '@/components/ComparisonView';
 
 interface AnalyticsViewProps {
@@ -29,6 +29,15 @@ export default function AnalyticsView({ currentUser }: AnalyticsViewProps) {
       security: Math.round(sum.security / count),
       complexity: Math.round(sum.complexity / count),
     };
+  }, [reviews]);
+
+  const progressData = useMemo(() => {
+    return [...reviews]
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+      .map(r => ({
+        date: new Date(r.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+        score: r.overall_score
+      }));
   }, [reviews]);
 
   return (
@@ -86,6 +95,27 @@ export default function AnalyticsView({ currentUser }: AnalyticsViewProps) {
                     </ResponsiveContainer>
                 )}
             </div>
+        </div>
+
+        {/* Progress Chart */}
+        <div className="bg-[#ffffff] border-[0.5px] border-[#e0e5eb] rounded-[12px] p-[16px] h-[248px]">
+            <div className="text-[12px] font-medium text-[#1a2332] mb-[12px]">Overall Score Progress</div>
+            {progressData.length < 2 ? (
+                <div className="flex flex-col items-center justify-center h-[200px] text-center">
+                    <div className="text-[#b0bcc8] mb-2"><span className="text-[28px]">📈</span></div>
+                    <div className="text-[13px] font-medium text-[#8a9ab0]">Need at least 2 reviews to show progress</div>
+                </div>
+            ) : (
+                <ResponsiveContainer width="100%" height={200}>
+                    <LineChart data={progressData} margin={{ right: 16, top: 16, bottom: 8 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e0e5eb" vertical={false} />
+                        <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#8a9ab0' }} axisLine={false} tickLine={false} />
+                        <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: '#8a9ab0' }} axisLine={false} tickLine={false} />
+                        <Tooltip contentStyle={{ backgroundColor: '#1e2735', color: '#e8edf3', border: 'none', borderRadius: '8px', fontSize: '12px' }} />
+                        <Line type="monotone" dataKey="score" stroke="#1D9E75" strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                    </LineChart>
+                </ResponsiveContainer>
+            )}
         </div>
 
         {/* Metric Cards */}
