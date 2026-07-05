@@ -361,6 +361,15 @@ export default function ReviewResult({ review, originalCodeSnippet, language }: 
                     <p className="text-[10px] text-slate-400 line-clamp-2 mt-0.5 leading-normal">
                       {suggestion.explanation}
                     </p>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigator.clipboard.writeText(suggestion.improved_code);
+                      }}
+                      className="text-[9px] font-bold text-emerald-400 hover:text-emerald-300 mt-1"
+                    >
+                      [ Copy Fix ]
+                    </button>
                   </button>
                 );
               })}

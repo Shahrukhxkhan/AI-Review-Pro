@@ -134,7 +134,7 @@ async function startServer() {
         }
       });
 
-      const claudeOutput = JSON.parse(response.text!);
+      const claudeOutput = cleanAndParseJSON(response.text!);
 
       // Retrieve authentication details from authorization headers if mapped
       const authHeader = req.headers.authorization;
