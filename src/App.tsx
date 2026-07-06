@@ -4,10 +4,10 @@ import DashboardPage from '@/components/DashboardView';
 import AnalyticsPage from '@/components/AnalyticsView';
 import ReportsPage from '@/components/ReportsView';
 import NotificationCenter from '@/components/NotificationCenter';
-import NewReviewPage from '@/app/new-review/page';
-import HistoryPage from '@/app/history/page';
-import SettingsPage from '@/app/settings/page';
-import LoginPage from '@/app/login/page';
+import NewReviewPage from '@/components/NewReviewView';
+import HistoryPage from '@/components/HistoryView';
+import SettingsPage from '@/components/SettingsView';
+import LoginPage from '@/components/LoginView';
 import { ToastProvider } from '@/context/ToastContext';
 import RealtimeStatus from '@/components/RealtimeStatus';
 
