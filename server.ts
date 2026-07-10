@@ -1,4 +1,5 @@
 import express from 'express';
+import rateLimit from 'express-rate-limit';
 import path from 'path';
 import dotenv from 'dotenv';
 import { GoogleGenAI } from '@google/genai';
@@ -27,8 +28,15 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  // Support JSON parsing in post bodies
-  app.use(express.json());
+  // Support JSON parsing in post bodies with payload limit
+  app.use(express.json({ limit: '100kb' }));
+
+  // Rate limiter for review endpoint
+  const reviewLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 10, // limit each IP to 10 requests per windowMs
+    message: { error: 'Too many requests from this IP, please try again after 15 minutes.' },
+  });
 
   // Initialize Gemini client (lazy init helper)
   const getGemini = () => {
@@ -104,11 +112,17 @@ async function startServer() {
   });
 
   // Main code review endpoint
-  app.post('/api/review', async (req, res) => {
+  app.post('/api/review', reviewLimiter, async (req, res) => {
     const { code, language } = req.body;
 
     if (!code || !language) {
       res.status(400).json({ error: 'Missing required parameters: code or language.' });
+      return;
+    }
+
+    const MAX_CODE_LENGTH = 20000;
+    if (typeof code !== 'string' || code.length > MAX_CODE_LENGTH) {
+      res.status(400).json({ error: 'Code snippet exceeds maximum allowed length.' });
       return;
     }
 
