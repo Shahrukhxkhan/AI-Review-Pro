@@ -148,7 +148,7 @@ async function startServer() {
         }
       });
 
-      const claudeOutput = cleanAndParseJSON(response.text!);
+      const geminiOutput = cleanAndParseJSON(response.text!);
 
       // Retrieve authentication details from authorization headers if mapped
       const authHeader = req.headers.authorization;
@@ -163,11 +163,11 @@ async function startServer() {
         if (user && !authError) {
           authenticatedUserId = user.id;
 
-          // Parse Claude feedback format to conform with Supabase feedback schema: ReviewFeedback
+          // Parse Gemini feedback format to conform with Supabase feedback schema: ReviewFeedback
           const transformedFeedback = {
-            summary: claudeOutput.summary,
-            key_issues: claudeOutput.issues.map((i: any) => `[${i.type.toUpperCase()} - ${i.severity.toUpperCase()}] Line ${i.line}: ${i.description}`),
-            suggestions: claudeOutput.suggestions.map((s: any) => ({
+            summary: geminiOutput.summary,
+            key_issues: geminiOutput.issues.map((i: any) => `[${i.type.toUpperCase()} - ${i.severity.toUpperCase()}] Line ${i.line}: ${i.description}`),
+            suggestions: geminiOutput.suggestions.map((s: any) => ({
               issue: `${s.title}: ${s.explanation}`,
               fix: s.improved_code,
               line: undefined
@@ -185,11 +185,11 @@ async function startServer() {
               user_id: authenticatedUserId,
               language,
               code_snippet: code,
-              overall_score: Number(claudeOutput.overall_score),
-              bug_score: Number(claudeOutput.bug_score),
-              security_score: Number(claudeOutput.security_score),
-              readability_score: Number(claudeOutput.readability_score),
-              complexity_score: Number(claudeOutput.complexity_score),
+              overall_score: Number(geminiOutput.overall_score),
+              bug_score: Number(geminiOutput.bug_score),
+              security_score: Number(geminiOutput.security_score),
+              readability_score: Number(geminiOutput.readability_score),
+              complexity_score: Number(geminiOutput.complexity_score),
               feedback: transformedFeedback
             })
             .select()
@@ -206,7 +206,7 @@ async function startServer() {
 
       // Return both parsed JSON data and details of any saved Supabase record
       res.json({
-        review: claudeOutput,
+        review: geminiOutput,
         savedRecord
       });
 

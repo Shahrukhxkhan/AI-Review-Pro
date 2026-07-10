@@ -49,6 +49,5 @@ export function getEnvKeys() {
   return {
     supabaseUrl: supabaseUrl || '',
     supabaseAnonKey: supabaseAnonKey || '',
-    anthropicApiKey: process.env.ANTHROPIC_API_KEY || ''
   };
 }

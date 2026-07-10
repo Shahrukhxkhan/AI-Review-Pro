@@ -407,8 +407,8 @@ export default function NewReviewView({ onAddReview }: NewReviewViewProps) {
 
     } catch (err: any) {
       console.error('Frontend analysis execution error:', err);
-      // Fallback behavior if Anthropic Claude is not yet configured or on local workspace
-      if (err.message?.includes('not configured')) {
+      // Fallback behavior if Gemini API call fails: run static AST rule matching.
+      if (err.message?.includes('not configured') || true) { // Always allow fallback if API fails
         try {
           console.log('Running static AST rule matching local backup fallback...');
           const localReview = executeLocalAnalysis(language, codeSnippet);

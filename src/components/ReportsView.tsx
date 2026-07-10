@@ -3,11 +3,12 @@ import { Report } from '@/types';
 import { getSupabase } from '@/lib/supabase';
 import { generateReport } from '@/lib/reports';
 import { useUser } from '@/hooks/useUser';
+import { useReports } from '@/hooks/useReports';
 import { FileText, Plus } from 'lucide-react';
 
 export default function ReportsView() {
   const { user } = useUser();
-  const { reports, isLoading } = useReports(user?.id);
+  const { reports, isLoading, fetchReports } = useReports(user?.id);
   const [loading, setLoading] = useState(false); // keep loading for generation
 
   useEffect(() => {

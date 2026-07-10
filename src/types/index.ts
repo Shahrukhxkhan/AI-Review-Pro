@@ -78,6 +78,5 @@ export interface DashboardStats {
 export interface AppSettings {
   supabaseUrl: string;
   supabaseAnonKey: string;
-  anthropicApiKey: string;
   useLocalStorageFallback: boolean;
 }

@@ -16,21 +16,22 @@ export const useReports = (userId: string | undefined) => {
   const channelRef = useRef<any>(null);
   const { showToast } = useToast();
 
+  const fetchReports = async () => {
+    if (!userId) return;
+    const supabase = getSupabase();
+    if (!supabase) return;
+    const { data } = await supabase
+      .from('reports')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+    
+    if (data) setReports(data);
+    setIsLoading(false);
+  };
+
   useEffect(() => {
     if (!userId) return;
-
-    const fetchReports = async () => {
-      const supabase = getSupabase();
-      if (!supabase) return;
-      const { data } = await supabase
-        .from('reports')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false });
-      
-      if (data) setReports(data);
-      setIsLoading(false);
-    };
 
     fetchReports();
 
@@ -55,5 +56,5 @@ export const useReports = (userId: string | undefined) => {
     };
   }, [userId]);
 
-  return { reports, isLoading };
+  return { reports, isLoading, fetchReports };
 };
