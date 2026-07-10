@@ -361,6 +361,8 @@ export default function App() {
     );
   }
 
+  // Intentional client-side-only protection as no Next.js middleware layer exists.
+  // This guard ensures that if Supabase is configured, users must be authenticated to access protected views.
   if (isSupabaseConnected && !currentUser) {
     return (
       <div className="min-h-screen bg-[#020203] flex items-center justify-center w-full">
