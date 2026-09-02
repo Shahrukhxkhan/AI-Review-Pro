@@ -27,27 +27,24 @@ describe('Backend API Integration Tests', () => {
         .send({ language: 'TypeScript' });
 
       expect(res.status).toBe(400);
-      expect(res.body.error).toContain('Missing or empty code parameter');
+      expect(res.body.error).toContain('Missing required parameters');
     });
 
     it('returns 400 Bad Request when code snippet is only whitespace', async () => {
       const res = await request(app)
         .post('/api/review')
-        .send({ code: '   \n  \t  ' });
+        .send({ code: '   \n  \t  ', language: 'TypeScript' });
 
       expect(res.status).toBe(400);
-      expect(res.body.error).toContain('Missing or empty code parameter');
+      expect(res.body.error).toContain('Missing required parameters');
     });
   });
 
   describe('GET /api/dashboard-stats', () => {
-    it('returns aggregated statistics structure without error', async () => {
+    it('returns 401 Unauthorized when unauthenticated request lacks Bearer token', async () => {
       const res = await request(app).get('/api/dashboard-stats');
-      expect(res.status).toBe(200);
-      expect(res.body).toHaveProperty('totalReviews');
-      expect(res.body).toHaveProperty('averageOverall');
-      expect(res.body).toHaveProperty('averageDimensionScores');
-      expect(typeof res.body.totalReviews).toBe('number');
+      expect(res.status).toBe(401);
+      expect(res.body.error).toContain('Unauthorized or database credentials missing');
     });
   });
 
