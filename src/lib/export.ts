@@ -79,3 +79,50 @@ export const exportToCsv = (data: CodeReview | CodeReview[], filename: string) =
   a.click();
   URL.revokeObjectURL(url);
 };
+
+export const exportReportToMarkdown = (report: any, filename: string) => {
+  let md = `# AI Review Pro - ${report.type.toUpperCase()} Performance Audit Report\n\n`;
+  md += `- **Report ID**: ${report.id}\n`;
+  md += `- **Generated Date**: ${new Date(report.created_at).toLocaleString()}\n`;
+  md += `- **Audits Completed**: ${report.reviews_completed}\n`;
+  md += `- **Average Quality Score**: ${Number(report.average_score).toFixed(1)} / 100\n`;
+  md += `- **Most Common Defect**: ${report.most_common_issue || 'None'}\n`;
+  md += `- **Improvement Differential**: ${report.improvement_percentage >= 0 ? '+' : ''}${Number(report.improvement_percentage || 0).toFixed(1)}%\n\n`;
+  md += `---\n*Generated automatically by AI Review Pro*\n`;
+
+  const blob = new Blob([md], { type: 'text/markdown' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${filename}.md`;
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
+export const exportReportToPdf = (report: any, filename: string) => {
+  const doc = new jsPDF();
+  doc.setFontSize(18);
+  doc.text(`AI Review Pro - ${report.type.toUpperCase()} Report`, 14, 20);
+  
+  doc.setFontSize(10);
+  doc.setTextColor(100);
+  doc.text(`Report ID: ${report.id}`, 14, 28);
+  doc.text(`Generated: ${new Date(report.created_at).toLocaleString()}`, 14, 34);
+  
+  doc.setDrawColor(200);
+  doc.line(14, 40, 196, 40);
+  
+  doc.setTextColor(20);
+  doc.setFontSize(12);
+  doc.text(`Audits Completed: ${report.reviews_completed}`, 14, 52);
+  doc.text(`Average Quality Score: ${Number(report.average_score).toFixed(1)} / 100`, 14, 62);
+  doc.text(`Most Common Issue: ${report.most_common_issue || 'None'}`, 14, 72);
+  doc.text(`Quality Improvement: ${report.improvement_percentage >= 0 ? '+' : ''}${Number(report.improvement_percentage || 0).toFixed(1)}%`, 14, 82);
+  
+  doc.setFontSize(9);
+  doc.setTextColor(120);
+  doc.text(`Confidential - AI Review Pro Intelligence Engine`, 14, 280);
+  
+  doc.save(`${filename}.pdf`);
+};
+

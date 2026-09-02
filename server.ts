@@ -130,7 +130,7 @@ async function startServer() {
       const ai = getGemini();
       
       const response = await ai.models.generateContent({
-        model: 'gemini-3.5-flash',
+        model: 'gemini-2.5-flash',
         contents: `Please review this code snippet written in ${language}:\n\n${code}`,
         config: {
           systemInstruction: `You are an expert code reviewer. Analyze the provided code and return ONLY a valid JSON object with this exact structure:
