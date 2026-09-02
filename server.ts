@@ -24,9 +24,8 @@ function cleanAndParseJSON(rawText: string) {
   return JSON.parse(cleaned);
 }
 
-async function startServer() {
+export function createExpressApp() {
   const app = express();
-  const PORT = 3000;
 
   // Support JSON parsing in post bodies with payload limit
   app.use(express.json({ limit: '100kb' }));
@@ -475,6 +474,13 @@ Answer the developer's follow-up questions accurately, concisely, and practicall
     }
   });
 
+  return app;
+}
+
+export async function startServer() {
+  const app = createExpressApp();
+  const PORT = process.env.PORT || 3000;
+
   // Vite integration middleware
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
@@ -495,8 +501,12 @@ Answer the developer's follow-up questions accurately, concisely, and practicall
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Express application server running on http://localhost:${PORT}`);
   });
+  return app;
 }
 
-startServer().catch((error) => {
-  console.error('Failed to boot Express web server:', error);
-});
+if (process.env.NODE_ENV !== 'test') {
+  startServer().catch((error) => {
+    console.error('Failed to boot Express web server:', error);
+  });
+}
+
