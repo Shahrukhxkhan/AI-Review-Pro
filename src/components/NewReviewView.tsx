@@ -27,7 +27,8 @@ import {
   Layers,
   FileText,
   ExternalLink,
-  Code2
+  Code2,
+  Download
 } from 'lucide-react';
 import Editor from '@monaco-editor/react';
 import { CodeReview, ReviewPersona } from '@/types';

@@ -27,9 +27,9 @@ describe('NewReviewView Component', () => {
     render(<NewReviewView onAddReview={mockAddReview} />);
 
     expect(screen.getByText('New AI Code Review')).toBeInTheDocument();
-    expect(screen.getByText('Snippet')).toBeInTheDocument();
-    expect(screen.getByText('Git Diff / PR')).toBeInTheDocument();
-    expect(screen.getByText('Multi-File')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Snippet/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Git Diff \/ PR/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Multi-File/i })).toBeInTheDocument();
 
     // Check persona buttons
     expect(screen.getByText('Balanced Generalist')).toBeInTheDocument();
@@ -41,7 +41,7 @@ describe('NewReviewView Component', () => {
   it('switches to Git Diff / PR mode and shows PR fetcher bar', () => {
     render(<NewReviewView onAddReview={mockAddReview} />);
 
-    const prModeButton = screen.getByText('Git Diff / PR');
+    const prModeButton = screen.getByRole('button', { name: /Git Diff \/ PR/i });
     fireEvent.click(prModeButton);
 
     expect(screen.getByText('Import Public GitHub Pull Request Diff')).toBeInTheDocument();
@@ -52,7 +52,7 @@ describe('NewReviewView Component', () => {
   it('switches to Multi-File mode and displays file list and upload trigger', () => {
     render(<NewReviewView onAddReview={mockAddReview} />);
 
-    const multiFileButton = screen.getByText('Multi-File');
+    const multiFileButton = screen.getByRole('button', { name: /Multi-File/i });
     fireEvent.click(multiFileButton);
 
     expect(screen.getByText(/Connected Files in Workspace/i)).toBeInTheDocument();
