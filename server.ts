@@ -149,7 +149,7 @@ Analyze the provided code and return ONLY a valid JSON object with this exact st
   app.post('/api/review', reviewLimiter, async (req, res) => {
     const { code, language, persona, customGuidelines } = req.body;
 
-    if (!code || !language) {
+    if (!code || !language || !code.trim()) {
       res.status(400).json({ error: 'Missing required parameters: code or language.' });
       return;
     }
