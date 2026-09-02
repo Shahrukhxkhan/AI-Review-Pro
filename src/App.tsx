@@ -8,6 +8,7 @@ import NewReviewPage from '@/components/NewReviewView';
 import HistoryPage from '@/components/HistoryView';
 import SettingsPage from '@/components/SettingsView';
 import LoginPage from '@/components/LoginView';
+import ShareView from '@/components/ShareView';
 import { ToastProvider } from '@/context/ToastContext';
 import RealtimeStatus from '@/components/RealtimeStatus';
 
@@ -60,6 +61,10 @@ export default function App() {
       } else if (pathname.startsWith('/review/')) {
         const id = pathname.substring('/review/'.length);
         setCurrentTab('history');
+        setSelectedReviewId(id);
+      } else if (pathname.startsWith('/share/')) {
+        const id = pathname.substring('/share/'.length);
+        setCurrentTab('share');
         setSelectedReviewId(id);
       } else {
         setCurrentTab('dashboard');
@@ -358,6 +363,18 @@ export default function App() {
           <p className="text-slate-500 text-xs font-mono tracking-widest uppercase">Initializing AI-Review Pro...</p>
         </div>
       </div>
+    );
+  }
+
+  // Public share permalinks view (no authentication wall)
+  if (currentTab === 'share') {
+    return (
+      <ToastProvider>
+        <ShareView 
+          reviewId={selectedReviewId} 
+          onNavigateToApp={() => changeTab('dashboard')} 
+        />
+      </ToastProvider>
     );
   }
 

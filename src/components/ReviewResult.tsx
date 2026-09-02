@@ -12,6 +12,7 @@ import {
   FileCode, 
   ArrowRight, 
   Download,
+  Share2,
   MessageSquare,
   Send,
   Copy,
@@ -84,6 +85,7 @@ export default function ReviewResult({ review, originalCodeSnippet, language, on
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState<number>(0);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [appliedIndex, setAppliedIndex] = useState<number | null>(null);
+  const [shareToast, setShareToast] = useState(false);
 
   // Interactive Follow-up Chat State
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
@@ -255,11 +257,37 @@ export default function ReviewResult({ review, originalCodeSnippet, language, on
         {/* Middle Segment: Executive Summary Box */}
         <div className="md:col-span-2 bg-[#0b0b0e] p-6 rounded-3xl border border-slate-800/80 shadow-xl flex flex-col justify-between space-y-6">
           <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-indigo-400" />
-              <span className="text-[10px] tracking-widest font-black uppercase text-slate-400 font-sans">
-                AI Executive Summary
-              </span>
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-accent" />
+                <span className="text-[10px] tracking-widest font-black uppercase text-slate-400 font-sans">
+                  AI Executive Summary
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    const reviewId = (review as any).id || 'sample';
+                    const shareUrl = `${window.location.origin}/share/${reviewId}`;
+                    navigator.clipboard.writeText(shareUrl);
+                    setShareToast(true);
+                    setTimeout(() => setShareToast(false), 2500);
+                  }}
+                  className="px-3 py-1 rounded-lg bg-[#16161f] border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
+                >
+                  <Share2 className="w-3.5 h-3.5 text-accent" />
+                  <span>{shareToast ? 'Link Copied!' : 'Share'}</span>
+                </button>
+
+                <button
+                  onClick={() => exportToPdf(review as any, `audit-${language}-${Date.now()}`)}
+                  className="px-3 py-1 rounded-lg bg-[#16161f] border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
+                >
+                  <Download className="w-3.5 h-3.5 text-rose-400" />
+                  <span>PDF</span>
+                </button>
+              </div>
             </div>
             <p id="review-summary-paragraph" className="text-sm text-slate-300 font-sans leading-relaxed">
               {executiveSummary}

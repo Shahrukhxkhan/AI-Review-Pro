@@ -390,6 +390,90 @@ Answer the developer's follow-up questions accurately, concisely, and practicall
     }
   });
 
+  // Public GitHub PR diff fetcher
+  app.post('/api/github/fetch-pr', async (req, res) => {
+    const { prUrl } = req.body;
+    if (!prUrl || typeof prUrl !== 'string') {
+      res.status(400).json({ error: 'Missing prUrl parameter.' });
+      return;
+    }
+
+    try {
+      const match = prUrl.match(/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/i);
+      if (!match) {
+        res.status(400).json({ error: 'Invalid GitHub PR URL format. Expected: https://github.com/:owner/:repo/pull/:number' });
+        return;
+      }
+
+      const [, owner, repo, pullNumber] = match;
+      const diffUrl = `https://patch-diff.githubusercontent.com/raw/${owner}/${repo}/pull/${pullNumber}.diff`;
+      
+      let response = await fetch(diffUrl, {
+        headers: {
+          'User-Agent': 'AI-Review-Pro-Platform',
+          'Accept': 'text/plain'
+        }
+      });
+
+      if (!response.ok) {
+        const fallbackUrl = `https://github.com/${owner}/${repo}/pull/${pullNumber}.diff`;
+        response = await fetch(fallbackUrl, {
+          headers: { 'User-Agent': 'AI-Review-Pro-Platform' }
+        });
+
+        if (!response.ok) {
+          throw new Error(`GitHub responded with ${response.status}. Ensure the repository is public.`);
+        }
+      }
+
+      const diffText = await response.text();
+      res.json({
+        diff: diffText,
+        title: `PR #${pullNumber}: ${owner}/${repo}`,
+        owner,
+        repo,
+        pullNumber
+      });
+    } catch (err: any) {
+      console.error('Failed to fetch GitHub PR diff:', err);
+      res.status(500).json({
+        error: err.message || 'Failed to fetch PR diff from GitHub.'
+      });
+    }
+  });
+
+  // Public unauthenticated review fetcher for shareable permalinks
+  app.get('/api/public/review/:id', async (req, res) => {
+    const { id } = req.params;
+    if (!id) {
+      res.status(400).json({ error: 'Missing review id parameter.' });
+      return;
+    }
+
+    try {
+      const supabaseServer = getSupabaseServer();
+      if (!supabaseServer) {
+        res.status(404).json({ error: 'Remote database not configured.' });
+        return;
+      }
+
+      const { data, error } = await supabaseServer
+        .from('reviews')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle();
+
+      if (error || !data) {
+        res.status(404).json({ error: 'Review not found.' });
+        return;
+      }
+
+      res.json({ review: data });
+    } catch (err: any) {
+      console.error('Public review fetch error:', err);
+      res.status(500).json({ error: 'Failed to retrieve public review.' });
+    }
+  });
 
   // Vite integration middleware
   if (process.env.NODE_ENV !== 'production') {

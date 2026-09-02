@@ -29,14 +29,18 @@ Built with a responsive, modern glassmorphism aesthetic, AI Review Pro includes 
 ## ✨ Key Features
 
 - 🤖 **AI-Powered Code Auditing**: Instant, detailed evaluation of source code across multiple languages using Google's Gemini 2.5 Flash API.
+- ⚡ **Real-Time Streaming AI**: Live Server-Sent Events (SSE) streaming progressive evaluation feedback directly as the model reasons.
+- 💬 **Interactive Follow-up Chat ("Ask AI")**: In-depth conversational assistant to clarify bugs, generate unit tests, or request alternative refactorings.
+- 🎭 **Review Personas & Team Guidelines**: Switch between *Security Auditor*, *Performance Ninja*, *Junior Mentor*, and *Balanced Generalist*, plus custom organizational rule injection.
+- 🔀 **Direct Git Diff & GitHub PR Ingestion**: Paste raw unified diffs or input public GitHub Pull Request URLs (`https://github.com/:owner/:repo/pull/:id`) for instant PR delta analysis.
+- 📁 **Multi-File Project Workspace**: Drag-and-drop or select connected components (e.g. controller + service + types) for comprehensive cross-file architectural audits.
+- 🔗 **Shareable Permalinks (`/share/:id`)**: Generate unlisted, public report URLs that teammates or stakeholders can view without requiring authentication.
+- 💻 **Standalone CLI & GitHub Actions**: Run `npx ai-review-pro <file>` or automated CI/CD PR review bots that post comments directly on GitHub Pull Requests.
 - 🎯 **Multi-Dimensional Quality Scoring**: Categorized metric scoring (0–100) for **Security**, **Performance**, **Readability**, **Bug Risk**, and **Complexity**.
-- 💻 **Integrated Monaco Code Editor**: IDE-like editor experience with syntax highlighting, automatic indentation, and language selection.
-- 🔀 **Side-by-Side Diff Comparison**: Interactive view comparing submitted original code directly against AI-recommended refactored solutions.
+- 💻 **Integrated Monaco Code Editor**: IDE-like editor experience with 1-click **"Apply Suggestion"** into the editor buffer.
 - 📊 **Interactive Analytics Dashboard**: Visual graphs and trend analysis powered by Recharts to track code health and review frequency over time.
-- 🔥 **Streak & Gamification Tracking**: System to encourage consistent review practices through daily streaks and performance metrics.
-- 📜 **Historical Audit Log**: Complete history of past reviews stored in Supabase with search, filtering, and tag classification.
-- 📄 **Exportable PDF Reports**: Download professional, formatted audit summaries via `jsPDF` for documentation and team sharing.
-- 🛡️ **Built-in Rate Limiting & Security**: Server-side Express rate-limiting middleware protection for AI endpoints.
+- 🔥 **Streak & Gamification Tracking**: System to encourage consistent review practices through daily streaks and milestone rewards.
+- 📄 **Exportable PDF & Markdown Reports**: Download professional, formatted audit summaries via `jsPDF` for documentation and team sharing.
 
 ---
 
@@ -165,6 +169,33 @@ Builds the Vite static client and bundles `server.ts` with `esbuild`:
 npm run build
 npm start
 ```
+
+---
+
+## 💻 CLI & CI/CD Integration
+
+### **Local CLI Audits**
+Execute quality audits directly from your terminal or pipes:
+
+```bash
+# Audit any local source file
+node bin/cli.mjs src/index.ts
+
+# Audit with a specific persona (security, performance, mentor)
+node bin/cli.mjs src/index.ts --persona security
+
+# Audit your current uncommitted git changes
+git diff | node bin/cli.mjs --stdin
+
+# CI/CD Gatekeeping: exit with error code 1 if score < 80
+node bin/cli.mjs src/index.ts --fail-under 80
+
+# Output as GitHub PR comment in Markdown
+node bin/cli.mjs src/index.ts --markdown
+```
+
+### **Automated GitHub Actions PR Bot**
+AI Review Pro includes a ready-to-use GitHub Action workflow in `.github/workflows/ai-review.yml` that audits every incoming pull request and posts an executive summary comment directly onto the PR.
 
 ---
 

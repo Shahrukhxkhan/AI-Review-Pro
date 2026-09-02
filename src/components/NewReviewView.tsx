@@ -5,21 +5,29 @@ import {
   AlertCircle, 
   BookOpen, 
   Terminal, 
-  PlusCircle,
-  HelpCircle,
-  RotateCcw,
-  Bug,
-  ShieldAlert,
-  Play,
-  Flame,
-  Info,
-  Award,
-  Zap,
-  HeartHandshake,
-  CheckCircle2,
-  Check,
-  Radio,
-  RadioTower
+  PlusCircle, 
+  HelpCircle, 
+  RotateCcw, 
+  Bug, 
+  ShieldAlert, 
+  Play, 
+  Flame, 
+  Info, 
+  Award, 
+  Zap, 
+  HeartHandshake, 
+  CheckCircle2, 
+  Check, 
+  RadioTower,
+  GitPullRequest,
+  FolderArchive,
+  FileCode,
+  UploadCloud,
+  X,
+  Layers,
+  FileText,
+  ExternalLink,
+  Code2
 } from 'lucide-react';
 import Editor from '@monaco-editor/react';
 import { CodeReview, ReviewPersona } from '@/types';
@@ -30,7 +38,15 @@ interface NewReviewViewProps {
   onAddReview: (review: Omit<CodeReview, 'id' | 'user_id' | 'created_at'> & { id?: string; user_id?: string; created_at?: string }) => void;
 }
 
-const LANGUAGES = ['JavaScript', 'TypeScript', 'Python', 'Java', 'C++', 'Go', 'Rust'];
+type InputMode = 'snippet' | 'git_diff' | 'multi_file';
+
+interface UploadedFile {
+  name: string;
+  content: string;
+  size: number;
+}
+
+const LANGUAGES = ['JavaScript', 'TypeScript', 'Python', 'Java', 'C++', 'Go', 'Rust', 'diff'];
 
 const mapLanguageToMonaco = (lang: string): string => {
   switch (lang.toLowerCase()) {
@@ -48,6 +64,8 @@ const mapLanguageToMonaco = (lang: string): string => {
       return 'go';
     case 'rust':
       return 'rust';
+    case 'diff':
+      return 'markdown';
     default:
       return 'typescript';
   }
@@ -124,14 +142,65 @@ fn calculate_ratio(nums: Option<Vec<i32>>) -> i32 {
     let divisor = actual_nums.get(0).cloned().unwrap_or(0);
     actual_nums.iter().sum::<i32>() / divisor
 }`;
+    case 'diff':
+      return `diff --git a/src/auth.ts b/src/auth.ts
+index 83a1b2c..9f4e21a 100644
+--- a/src/auth.ts
++++ b/src/auth.ts
+@@ -14,6 +14,8 @@ export async function verifyToken(req: Request) {
+-  const token = req.headers['authorization'];
+-  return jwt.verify(token, process.env.SECRET_KEY!);
++  const token = req.headers['x-api-key'];
++  // Hardcoded fallback token risk
++  return token === 'secret-dev-admin-key' ? true : jwt.verify(token, 'master_secret');
+ }`;
     default:
       return '// Paste your code snippet here...';
   }
 };
 
 export default function NewReviewView({ onAddReview }: NewReviewViewProps) {
+  // Input Modes
+  const [inputMode, setInputMode] = useState<InputMode>('snippet');
   const [language, setLanguage] = useState<string>('TypeScript');
   const [codeSnippet, setCodeSnippet] = useState<string>(getLanguageStarterCode('TypeScript'));
+
+  // Git Diff & PR state
+  const [prUrl, setPrUrl] = useState('');
+  const [fetchingPr, setFetchingPr] = useState(false);
+  const [prInfo, setPrInfo] = useState<{ title: string; lines: number } | null>(null);
+
+  // Multi-File Upload state
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([
+    {
+      name: 'UserController.ts',
+      content: `import { UserService } from './UserService';
+
+export class UserController {
+  private service = new UserService();
+
+  async getUser(req: any, res: any) {
+    const { id } = req.params;
+    // Missing authentication check
+    const user = await this.service.findById(id);
+    return res.json(user);
+  }
+}`,
+      size: 280
+    },
+    {
+      name: 'UserService.ts',
+      content: `export class UserService {
+  async findById(id: string): Promise<any> {
+    // Unsanitized query string
+    const query = "SELECT * FROM users WHERE id = '" + id + "'";
+    return db.raw(query);
+  }
+}`,
+      size: 210
+    }
+  ]);
+  const [activeFileIndex, setActiveFileIndex] = useState<number>(0);
   
   // Personas and Custom Guidelines
   const [persona, setPersona] = useState<ReviewPersona>('general');
@@ -166,14 +235,130 @@ export default function NewReviewView({ onAddReview }: NewReviewViewProps) {
     setSuccess(false);
   };
 
+  const handleInputModeChange = (mode: InputMode) => {
+    setInputMode(mode);
+    setReviewResult(null);
+    setSuccess(false);
+    setError(null);
+
+    if (mode === 'git_diff') {
+      setLanguage('diff');
+      setCodeSnippet(getLanguageStarterCode('diff'));
+    } else if (mode === 'multi_file') {
+      setLanguage('TypeScript');
+      if (uploadedFiles.length > 0) {
+        setCodeSnippet(uploadedFiles[activeFileIndex]?.content || '');
+      }
+    } else {
+      setLanguage('TypeScript');
+      setCodeSnippet(getLanguageStarterCode('TypeScript'));
+    }
+  };
+
+  // Fetch Public GitHub PR Diff
+  const handleFetchPr = async () => {
+    if (!prUrl.trim()) return;
+    setFetchingPr(true);
+    setError(null);
+
+    try {
+      const res = await fetch('/api/github/fetch-pr', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prUrl: prUrl.trim() })
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `GitHub PR fetch failed with status ${res.status}`);
+      }
+
+      const data = await res.json();
+      setCodeSnippet(data.diff);
+      setLanguage('diff');
+      setPrInfo({
+        title: data.title,
+        lines: data.diff.split('\n').length
+      });
+    } catch (err: any) {
+      console.error('Error fetching PR:', err);
+      setError(err.message || 'Could not fetch public GitHub PR diff.');
+    } finally {
+      setFetchingPr(false);
+    }
+  };
+
+  // Multi-File Upload Handlers
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    Array.from(files).forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const text = event.target?.result as string;
+        const newFile: UploadedFile = {
+          name: file.name,
+          content: text || '',
+          size: file.size
+        };
+
+        setUploadedFiles(prev => {
+          const existing = prev.filter(f => f.name !== file.name);
+          const updated = [...existing, newFile];
+          return updated;
+        });
+      };
+      reader.readAsText(file);
+    });
+  };
+
+  const handleSelectFile = (index: number) => {
+    // Save current editor content into previous active file
+    if (uploadedFiles[activeFileIndex]) {
+      uploadedFiles[activeFileIndex].content = codeSnippet;
+    }
+    setActiveFileIndex(index);
+    setCodeSnippet(uploadedFiles[index]?.content || '');
+  };
+
+  const handleRemoveFile = (index: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const updated = uploadedFiles.filter((_, i) => i !== index);
+    setUploadedFiles(updated);
+    if (activeFileIndex >= updated.length) {
+      const newIdx = Math.max(0, updated.length - 1);
+      setActiveFileIndex(newIdx);
+      setCodeSnippet(updated[newIdx]?.content || '');
+    } else {
+      setCodeSnippet(updated[activeFileIndex]?.content || '');
+    }
+  };
+
   const handleApplySuggestion = (improvedCode: string) => {
     setCodeSnippet(improvedCode);
+    if (inputMode === 'multi_file' && uploadedFiles[activeFileIndex]) {
+      uploadedFiles[activeFileIndex].content = improvedCode;
+    }
     setAppliedNotification('Applied refactored code to Monaco Editor!');
     setTimeout(() => setAppliedNotification(null), 4000);
     const editorEl = document.getElementById('monaco-code-container');
     if (editorEl) {
       editorEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
+  };
+
+  // Compile active code payload
+  const getActiveCodePayload = (): string => {
+    if (inputMode === 'multi_file') {
+      if (uploadedFiles.length === 0) return codeSnippet;
+      // Sync active editor content
+      uploadedFiles[activeFileIndex].content = codeSnippet;
+      return uploadedFiles
+        .map(f => `// ========================================\n// File: ${f.name}\n// ========================================\n${f.content}`)
+        .join('\n\n');
+    }
+    return codeSnippet;
   };
 
   const executeLocalAnalysis = (lang: string, code: string): Omit<CodeReview, 'id' | 'user_id' | 'created_at'> => {
@@ -192,22 +377,21 @@ export default function NewReviewView({ onAddReview }: NewReviewViewProps) {
 
     const lines = code.split('\n');
 
-    // Persona-informed local heuristics
     if (persona === 'security') {
       security -= 15;
     } else if (persona === 'performance') {
       complexity -= 15;
     }
 
-    // Rule 1: implicit any (TS / JS)
-    if ((lang === 'TypeScript' || lang === 'JavaScript') && code.includes(': any')) {
+    // Rule 1: implicit any
+    if (code.includes(': any')) {
       overall -= 10;
       readability -= 15;
       bug -= 10;
       keyIssues.push('[TYPE SAFETY - MEDIUM] Line ' + (lines.findIndex(l => l.includes(': any')) + 1) + ': Explicit `: any` bypasses compile-time type safety.');
       suggestions.push({
         issue: 'Type safety weakened by `: any`',
-        fix: code.replace(/: any/g, ': unknown /* replaced any with strict unknown */'),
+        fix: code.replace(/: any/g, ': unknown /* strict type checking */'),
         line: lines.findIndex(l => l.includes(': any')) + 1
       });
     }
@@ -218,34 +402,9 @@ export default function NewReviewView({ onAddReview }: NewReviewViewProps) {
       security -= 40;
       keyIssues.push('[SECURITY - HIGH] Line ' + (lines.findIndex(l => l.includes('SELECT * FROM')) + 1) + ': Concatenated SQL query risk (SQL Injection).');
       suggestions.push({
-        issue: 'Dynamic SQL concatenation vulnerability',
+        issue: 'Dynamic SQL query string concatenation',
         fix: code.replace(/let query = "SELECT \* FROM users WHERE id = '" \+ userId \+ "'"/g, 'const query = "SELECT * FROM users WHERE id = $1";\n  db.execute(query, [userId])'),
         line: lines.findIndex(l => l.includes('SELECT * FROM')) + 1
-      });
-    }
-
-    // Rule 3: eval() usage
-    if (code.includes('eval(')) {
-      overall -= 25;
-      security -= 35;
-      bug -= 15;
-      keyIssues.push('[VULNERABILITY - HIGH] Line ' + (lines.findIndex(l => l.includes('eval(')) + 1) + ': Arbitrary code execution risk with eval().');
-      suggestions.push({
-        issue: 'eval() execution vulnerability',
-        fix: code.replace(/eval\([^)]+\)/g, 'Number(values[0]) * 10'),
-        line: lines.findIndex(l => l.includes('eval(')) + 1
-      });
-    }
-
-    // Rule 4: strcpy in C++
-    if (code.includes('strcpy(')) {
-      overall -= 25;
-      security -= 30;
-      keyIssues.push('[BUFFER OVERFLOW - HIGH] Line ' + (lines.findIndex(l => l.includes('strcpy(')) + 1) + ': strcpy does not verify boundary limits.');
-      suggestions.push({
-        issue: 'Unbounded memory copy',
-        fix: code.replace(/strcpy\([^)]+\)/g, 'strncpy(localBuffer, input, sizeof(localBuffer) - 1);\n    localBuffer[sizeof(localBuffer) - 1] = \'\\0\''),
-        line: lines.findIndex(l => l.includes('strcpy(')) + 1
       });
     }
 
@@ -256,8 +415,8 @@ export default function NewReviewView({ onAddReview }: NewReviewViewProps) {
     complexity = Math.max(20, Math.min(100, complexity));
 
     const summary = keyIssues.length > 0
-      ? `Audit complete [Persona: ${persona.toUpperCase()}]. Found ${keyIssues.length} issues requiring resolution.`
-      : `Audit passed [Persona: ${persona.toUpperCase()}]. Clean architecture and solid best practices detected.`;
+      ? `Audit complete [Mode: ${inputMode.toUpperCase()} | Persona: ${persona.toUpperCase()}]. Found ${keyIssues.length} issues requiring attention.`
+      : `Audit passed [Mode: ${inputMode.toUpperCase()} | Persona: ${persona.toUpperCase()}]. Clean architecture and solid patterns detected.`;
 
     return {
       language: lang,
@@ -278,7 +437,9 @@ export default function NewReviewView({ onAddReview }: NewReviewViewProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!codeSnippet.trim()) {
+    const payloadCode = getActiveCodePayload();
+
+    if (!payloadCode.trim()) {
       return;
     }
 
@@ -299,6 +460,14 @@ export default function NewReviewView({ onAddReview }: NewReviewViewProps) {
         accessToken = session?.access_token || '';
       }
 
+      // Add mode instructions to guidelines
+      let modeGuidelines = customGuidelines || '';
+      if (inputMode === 'git_diff') {
+        modeGuidelines = `${modeGuidelines}\nNOTE: You are analyzing a unified git diff. Focus on the modified lines (+ additions and - removals). Point out breaking regressions or unhandled edge cases in the delta.`;
+      } else if (inputMode === 'multi_file') {
+        modeGuidelines = `${modeGuidelines}\nNOTE: You are auditing a multi-file connected project bundle. Scrutinize cross-file consistency, circular imports, data flow between modules, and authentication handoffs.`;
+      }
+
       // 1. Try Streaming SSE if enabled
       if (useStreaming) {
         try {
@@ -309,10 +478,10 @@ export default function NewReviewView({ onAddReview }: NewReviewViewProps) {
               ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {})
             },
             body: JSON.stringify({
-              code: codeSnippet,
-              language,
+              code: payloadCode,
+              language: inputMode === 'git_diff' ? 'diff' : language,
               persona,
-              customGuidelines
+              customGuidelines: modeGuidelines
             })
           });
 
@@ -369,7 +538,7 @@ export default function NewReviewView({ onAddReview }: NewReviewViewProps) {
                       fix: s.improved_code,
                       line: undefined
                     }))
-                  : [{ issue: 'All compliant', fix: codeSnippet }],
+                  : [{ issue: 'All compliant', fix: payloadCode }],
                 positives: [
                   'Source code exhibits clear conventions.',
                   'Execution structures are bounded.'
@@ -380,8 +549,8 @@ export default function NewReviewView({ onAddReview }: NewReviewViewProps) {
                 id: savedRecord?.id,
                 user_id: savedRecord?.user_id || 'local_user',
                 created_at: savedRecord?.created_at || new Date().toISOString(),
-                language,
-                code_snippet: codeSnippet,
+                language: inputMode === 'git_diff' ? 'diff' : language,
+                code_snippet: payloadCode,
                 overall_score: Number(finalParsedReview.overall_score || 0),
                 bug_score: Number(finalParsedReview.bug_score || 0),
                 security_score: Number(finalParsedReview.security_score || 0),
@@ -410,10 +579,10 @@ export default function NewReviewView({ onAddReview }: NewReviewViewProps) {
           ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {})
         },
         body: JSON.stringify({
-          code: codeSnippet,
-          language,
+          code: payloadCode,
+          language: inputMode === 'git_diff' ? 'diff' : language,
           persona,
-          customGuidelines
+          customGuidelines: modeGuidelines
         })
       });
 
@@ -441,7 +610,7 @@ export default function NewReviewView({ onAddReview }: NewReviewViewProps) {
               fix: s.improved_code,
               line: undefined
             }))
-          : [{ issue: 'All compliant', fix: codeSnippet }],
+          : [{ issue: 'All compliant', fix: payloadCode }],
         positives: [
           'Source code exhibits clear conventions.',
           'Execution structures are bounded.'
@@ -452,8 +621,8 @@ export default function NewReviewView({ onAddReview }: NewReviewViewProps) {
         id: savedRecord?.id,
         user_id: savedRecord?.user_id || 'local_user',
         created_at: savedRecord?.created_at || new Date().toISOString(),
-        language,
-        code_snippet: codeSnippet,
+        language: inputMode === 'git_diff' ? 'diff' : language,
+        code_snippet: payloadCode,
         overall_score: Number(aiOutput.overall_score || 0),
         bug_score: Number(aiOutput.bug_score || 0),
         security_score: Number(aiOutput.security_score || 0),
@@ -469,10 +638,9 @@ export default function NewReviewView({ onAddReview }: NewReviewViewProps) {
 
     } catch (err: any) {
       console.error('Frontend analysis execution error:', err);
-      // Fallback behavior if Gemini API call fails: run static AST rule matching.
       try {
         console.log('Running static AST rule matching local backup fallback...');
-        const localReview = executeLocalAnalysis(language, codeSnippet);
+        const localReview = executeLocalAnalysis(language, payloadCode);
         setReviewResult(localReview);
         setAnalyzing(false);
         setSuccess(true);
@@ -493,6 +661,7 @@ export default function NewReviewView({ onAddReview }: NewReviewViewProps) {
     setSuccess(false);
     setError(null);
     setStreamProgressText('');
+    setPrInfo(null);
   };
 
   const LoadingSkeleton = () => (
@@ -557,23 +726,50 @@ export default function NewReviewView({ onAddReview }: NewReviewViewProps) {
             <span>New AI Code Review</span>
           </h2>
           <p className="text-slate-400 text-sm mt-1">
-            Submit scripts for multi-vector AST quality scoring, security flaw detection, and live refactoring suggestions.
+            Audit single files, pull request diffs, or multi-component project workspaces with Gemini 2.5 Flash.
           </p>
         </div>
 
-        {/* Debug / Test Panel Controls */}
-        <div id="sandbox-debugger-toggle" className="self-start md:self-center bg-[#0d0d11] p-3 rounded-2xl border border-slate-800 flex items-center gap-2.5">
-          <input 
-            type="checkbox" 
-            id="simulate-api-chk"
-            checked={simulateApiFailure}
-            onChange={(e) => setSimulateApiFailure(e.target.checked)}
-            className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-rose-500 focus:ring-rose-500/20 cursor-pointer"
-          />
-          <label htmlFor="simulate-api-chk" className="text-xs font-mono text-slate-400 select-none cursor-pointer flex items-center gap-1.5">
-            <Flame className="h-3.5 w-3.5 text-rose-400" />
-            <span>Simulate API Error</span>
-          </label>
+        {/* Input Mode Selector */}
+        <div className="bg-[#050507] p-1.5 rounded-2xl border border-slate-800 flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => handleInputModeChange('snippet')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+              inputMode === 'snippet' 
+                ? 'bg-slate-800 text-white shadow-md' 
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <FileCode className="w-3.5 h-3.5 text-accent" />
+            <span>Snippet</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleInputModeChange('git_diff')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+              inputMode === 'git_diff' 
+                ? 'bg-slate-800 text-white shadow-md' 
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <GitPullRequest className="w-3.5 h-3.5 text-indigo-400" />
+            <span>Git Diff / PR</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleInputModeChange('multi_file')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+              inputMode === 'multi_file' 
+                ? 'bg-slate-800 text-white shadow-md' 
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Layers className="w-3.5 h-3.5 text-cyan-400" />
+            <span>Multi-File</span>
+          </button>
         </div>
       </div>
 
@@ -590,6 +786,43 @@ export default function NewReviewView({ onAddReview }: NewReviewViewProps) {
           >
             Re-Audit Fixed Code
           </button>
+        </div>
+      )}
+
+      {/* Git Diff / PR URL Bar */}
+      {inputMode === 'git_diff' && (
+        <div className="bg-[#0b0b0e] border border-slate-800/80 p-4 rounded-2xl space-y-3 animate-fade-in">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-white flex items-center gap-2">
+              <GitPullRequest className="w-4 h-4 text-indigo-400" />
+              Import Public GitHub Pull Request Diff
+            </span>
+            <span className="text-[10px] font-mono text-slate-500">Live Diff Ingestion</span>
+          </div>
+          <div className="flex flex-col sm:flex-row items-center gap-2">
+            <input
+              type="text"
+              value={prUrl}
+              onChange={(e) => setPrUrl(e.target.value)}
+              placeholder="e.g. https://github.com/facebook/react/pull/28000"
+              className="flex-1 w-full bg-[#050507] border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white placeholder-slate-600 outline-none focus:border-accent"
+            />
+            <button
+              type="button"
+              disabled={fetchingPr || !prUrl.trim()}
+              onClick={handleFetchPr}
+              className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold uppercase tracking-wider px-4 py-2.5 rounded-xl transition flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer shadow-lg shadow-indigo-500/10"
+            >
+              {fetchingPr ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+              <span>{fetchingPr ? 'Fetching...' : 'Fetch Diff'}</span>
+            </button>
+          </div>
+          {prInfo && (
+            <div className="flex items-center gap-2 text-xs font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-lg">
+              <CheckCircle className="w-3.5 h-3.5" />
+              <span>Loaded: {prInfo.title} ({prInfo.lines} diff lines)</span>
+            </div>
+          )}
         </div>
       )}
 
@@ -643,18 +876,66 @@ export default function NewReviewView({ onAddReview }: NewReviewViewProps) {
             </div>
           </div>
 
+          {/* Multi-File Workspace Sidebar & Tabs */}
+          {inputMode === 'multi_file' && (
+            <div className="bg-[#050507] border border-slate-850 p-4 rounded-2xl space-y-3 animate-fade-in">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Layers className="w-4 h-4 text-cyan-400" />
+                  <span className="text-xs font-bold text-white">Connected Files in Workspace ({uploadedFiles.length})</span>
+                </div>
+                <label className="bg-[#16161f] hover:bg-slate-800 border border-slate-800 text-slate-200 text-xs font-bold px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer">
+                  <UploadCloud className="w-3.5 h-3.5 text-accent" />
+                  <span>+ Add Files</span>
+                  <input
+                    type="file"
+                    multiple
+                    onChange={handleFileUpload}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+
+              {/* Files tab list */}
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
+                {uploadedFiles.map((f, i) => (
+                  <div
+                    key={i}
+                    onClick={() => handleSelectFile(i)}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-mono font-medium transition cursor-pointer shrink-0 border ${
+                      activeFileIndex === i 
+                        ? 'bg-slate-800 text-white border-slate-700 ring-1 ring-cyan-500/30' 
+                        : 'bg-[#0a0a0c] text-slate-400 border-slate-800 hover:text-white'
+                    }`}
+                  >
+                    <FileText className="w-3 h-3 text-cyan-400" />
+                    <span>{f.name}</span>
+                    <button
+                      type="button"
+                      onClick={(e) => handleRemoveFile(i, e)}
+                      className="text-slate-500 hover:text-rose-400 ml-1"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             
             {/* Language Selection selector */}
             <div className="space-y-1.5 flex-1 max-w-[240px]">
               <label htmlFor="language-select" className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                Target Language
+                {inputMode === 'git_diff' ? 'Diff Format' : 'Target Language'}
               </label>
               <select
                 id="language-select"
                 value={language}
+                disabled={inputMode === 'git_diff'}
                 onChange={(e) => handleLanguageChange(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-800 text-xs text-white bg-[#050507] focus:ring-1 focus:ring-accent focus:border-accent focus:outline-none cursor-pointer font-sans"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-800 text-xs text-white bg-[#050507] focus:ring-1 focus:ring-accent focus:border-accent focus:outline-none cursor-pointer font-sans disabled:opacity-50"
               >
                 {LANGUAGES.map((lang) => (
                   <option key={lang} value={lang} className="bg-[#050507] text-white">
@@ -720,12 +1001,12 @@ export default function NewReviewView({ onAddReview }: NewReviewViewProps) {
             {analyzing ? (
               <>
                 <div className="w-4 h-4 border-2 border-bg border-t-transparent rounded-full animate-spin shrink-0" />
-                <span>Analyzing AST & Security Vectors...</span>
+                <span>Analyzing {inputMode === 'git_diff' ? 'Git PR Diff' : inputMode === 'multi_file' ? 'Multi-File Bundle' : 'Codebase'}...</span>
               </>
             ) : (
               <>
                 <Play className="h-4 w-4 fill-current" />
-                <span>Launch AI Review ({persona.toUpperCase()})</span>
+                <span>Launch {inputMode === 'git_diff' ? 'PR Diff Audit' : inputMode === 'multi_file' ? 'Workspace Review' : 'AI Review'} ({persona.toUpperCase()})</span>
               </>
             )}
           </button>
@@ -749,7 +1030,7 @@ export default function NewReviewView({ onAddReview }: NewReviewViewProps) {
               <div className="flex items-start gap-3.5">
                 <AlertCircle className="h-5.5 w-5.5 text-rose-500 shrink-0 mt-0.5" />
                 <div className="space-y-1">
-                  <h4 className="text-sm font-bold text-white tracking-tight">Parser Handshake Failure</h4>
+                  <h4 className="text-sm font-bold text-white tracking-tight">Analysis Error</h4>
                   <p className="text-xs text-rose-300/80 leading-relaxed font-mono">
                     {error}
                   </p>
@@ -806,9 +1087,15 @@ export default function NewReviewView({ onAddReview }: NewReviewViewProps) {
             <div className="bg-[#0a0a0c] p-6 rounded-3xl border border-slate-800/80 shadow-lg text-center py-10 space-y-4 border-dashed">
               <HelpCircle className="h-8 w-8 text-slate-600 mx-auto animate-bounce" />
               <div className="space-y-1.5">
-                <h4 className="text-white text-xs font-bold font-sans uppercase tracking-widest">Awaiting Code Audit</h4>
+                <h4 className="text-white text-xs font-bold font-sans uppercase tracking-widest">
+                  {inputMode === 'git_diff' ? 'Awaiting Git PR Diff' : inputMode === 'multi_file' ? 'Multi-File Ready' : 'Awaiting Code Audit'}
+                </h4>
                 <p className="text-[10px] text-slate-500 max-w-[200px] mx-auto leading-relaxed">
-                  Select an audit persona, paste code inside the Monaco editor, and click &quot;Launch AI Review&quot;.
+                  {inputMode === 'git_diff'
+                    ? 'Paste a unified diff or fetch a GitHub PR URL to audit code deltas.'
+                    : inputMode === 'multi_file'
+                    ? 'Add multiple files to audit cross-component architecture and dependencies.'
+                    : 'Paste code inside Monaco and click "Launch AI Review".'}
                 </p>
               </div>
             </div>
@@ -818,14 +1105,14 @@ export default function NewReviewView({ onAddReview }: NewReviewViewProps) {
           <div className="bg-[#0a0a0c]/80 p-5 rounded-3xl border border-slate-850 shadow-md space-y-3">
             <span className="text-[9px] uppercase font-bold tracking-widest text-slate-500 flex items-center gap-1">
               <Info className="h-3 w-3 text-accent" />
-              <span>Diagnostic Triggers & Personas</span>
+              <span>Real-World Workflows</span>
             </span>
             <div className="text-[10px] text-slate-500 space-y-2 leading-relaxed font-sans">
-              <p>Switch between specialized audit personas to change Gemini&apos;s evaluation strictness:</p>
+              <p>Supports end-to-end engineering review workflows:</p>
               <ul className="list-disc list-inside space-y-1 font-mono text-slate-400">
-                <li><strong className="text-rose-400">Security Auditor</strong>: OWASP & injection defense</li>
-                <li><strong className="text-cyan-400">Performance Ninja</strong>: Big-O & memory overhead</li>
-                <li><strong className="text-indigo-400">Junior Mentor</strong>: Friendly, guided tutorials</li>
+                <li><strong className="text-indigo-400">PR Diff Mode</strong>: Audits pull request deltas</li>
+                <li><strong className="text-cyan-400">Multi-File</strong>: Bundles related components together</li>
+                <li><strong className="text-accent">Permalinks</strong>: Share audit summaries via URL</li>
               </ul>
             </div>
           </div>
@@ -838,8 +1125,8 @@ export default function NewReviewView({ onAddReview }: NewReviewViewProps) {
         <div id="full-detailed-review-result" className="mt-8 transition-all">
           <ReviewResult 
             review={reviewResult as any} 
-            originalCodeSnippet={codeSnippet} 
-            language={language} 
+            originalCodeSnippet={getActiveCodePayload()} 
+            language={inputMode === 'git_diff' ? 'diff' : language} 
             onApplySuggestion={handleApplySuggestion}
           />
         </div>
