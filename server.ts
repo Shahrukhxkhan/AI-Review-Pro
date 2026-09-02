@@ -111,9 +111,44 @@ async function startServer() {
     }
   });
 
+  // Helper to construct specialized review personas & team guideline instructions
+  const buildSystemInstruction = (persona?: string, customGuidelines?: string) => {
+    let personaInstruction = 'You are an expert code reviewer. Analyze the provided code objectively for bugs, security vulnerabilities, performance, readability, and complexity.';
+
+    if (persona === 'security') {
+      personaInstruction = `You are a ruthless Principal Security Architect and Penetration Testing Lead. 
+Focus intensely on OWASP Top 10 vulnerabilities, input sanitization, injection vectors (SQL, command, XSS), hardcoded credentials, buffer safety, auth/permission flaws, and cryptography. Provide high security severity ratings and actionable hardened patches.`;
+    } else if (persona === 'performance') {
+      personaInstruction = `You are a Principal High-Performance Systems Engineer and Runtime Optimizer.
+Focus relentlessly on Big-O algorithmic time and space complexity, unnecessary heap allocations, memory leaks, event loop blocking, CPU cache utilization, unindexed lookups, and asynchronous concurrency bottlenecks. Provide optimized, zero-overhead refactorings.`;
+    } else if (persona === 'mentor') {
+      personaInstruction = `You are an empathetic, encouraging Staff Engineer mentor guiding a junior-to-mid developer.
+Explain bugs and concepts kindly using clear, intuitive analogies. Celebrate good patterns in the code, explain *why* issues matter rather than just stating rules, and guide the developer with warm, pedagogical refactoring suggestions.`;
+    }
+
+    let guidelinesInstruction = '';
+    if (customGuidelines && customGuidelines.trim()) {
+      guidelinesInstruction = `\n\nTEAM CUSTOM CODING GUIDELINES:\n${customGuidelines.trim()}\nStrictly enforce these organizational rules in your review comments and scoring.\n`;
+    }
+
+    return `${personaInstruction}${guidelinesInstruction}
+
+Analyze the provided code and return ONLY a valid JSON object with this exact structure:
+{
+  "overall_score": number,
+  "bug_score": number,
+  "security_score": number,
+  "readability_score": number,
+  "complexity_score": number,
+  "issues": [{ "type": string, "severity": "low"|"medium"|"high", "line": number, "description": string }],
+  "suggestions": [{ "title": string, "explanation": string, "improved_code": string }],
+  "summary": string
+}`;
+  };
+
   // Main code review endpoint
   app.post('/api/review', reviewLimiter, async (req, res) => {
-    const { code, language } = req.body;
+    const { code, language, persona, customGuidelines } = req.body;
 
     if (!code || !language) {
       res.status(400).json({ error: 'Missing required parameters: code or language.' });
@@ -128,22 +163,13 @@ async function startServer() {
 
     try {
       const ai = getGemini();
+      const systemInstruction = buildSystemInstruction(persona, customGuidelines);
       
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: `Please review this code snippet written in ${language}:\n\n${code}`,
         config: {
-          systemInstruction: `You are an expert code reviewer. Analyze the provided code and return ONLY a valid JSON object with this exact structure:
-{
-  "overall_score": number,
-  "bug_score": number,
-  "security_score": number,
-  "readability_score": number,
-  "complexity_score": number,
-  "issues": [{ "type": string, "severity": "low"|"medium"|"high", "line": number, "description": string }],
-  "suggestions": [{ "title": string, "explanation": string, "improved_code": string }],
-  "summary": string
-}`,
+          systemInstruction,
           responseMimeType: 'application/json'
         }
       });
@@ -163,22 +189,20 @@ async function startServer() {
         if (user && !authError) {
           authenticatedUserId = user.id;
 
-          // Parse Gemini feedback format to conform with Supabase feedback schema: ReviewFeedback
           const transformedFeedback = {
             summary: geminiOutput.summary,
-            key_issues: geminiOutput.issues.map((i: any) => `[${i.type.toUpperCase()} - ${i.severity.toUpperCase()}] Line ${i.line}: ${i.description}`),
-            suggestions: geminiOutput.suggestions.map((s: any) => ({
+            key_issues: geminiOutput.issues?.map((i: any) => `[${i.type.toUpperCase()} - ${i.severity.toUpperCase()}] Line ${i.line}: ${i.description}`) || [],
+            suggestions: geminiOutput.suggestions?.map((s: any) => ({
               issue: `${s.title}: ${s.explanation}`,
               fix: s.improved_code,
               line: undefined
-            })),
+            })) || [],
             positives: [
               'Code conforms to industry best practices.',
               'Logic shows correct semantic understanding.'
             ]
           };
 
-          // Save the review directly inside Supabase
           const { data, error: insertError } = await supabaseServer
             .from('reviews')
             .insert({
@@ -204,7 +228,6 @@ async function startServer() {
         }
       }
 
-      // Return both parsed JSON data and details of any saved Supabase record
       res.json({
         review: geminiOutput,
         savedRecord
@@ -217,6 +240,156 @@ async function startServer() {
       });
     }
   });
+
+  // Streaming code review endpoint (SSE)
+  app.post('/api/review/stream', reviewLimiter, async (req, res) => {
+    const { code, language, persona, customGuidelines } = req.body;
+
+    if (!code || !language) {
+      res.status(400).json({ error: 'Missing required parameters: code or language.' });
+      return;
+    }
+
+    const MAX_CODE_LENGTH = 20000;
+    if (typeof code !== 'string' || code.length > MAX_CODE_LENGTH) {
+      res.status(400).json({ error: 'Code snippet exceeds maximum allowed length.' });
+      return;
+    }
+
+    // Set Server-Sent Events headers
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    if (res.flushHeaders) res.flushHeaders();
+
+    try {
+      const ai = getGemini();
+      const systemInstruction = buildSystemInstruction(persona, customGuidelines);
+
+      const responseStream = await ai.models.generateContentStream({
+        model: 'gemini-2.5-flash',
+        contents: `Please review this code snippet written in ${language}:\n\n${code}`,
+        config: {
+          systemInstruction,
+          responseMimeType: 'application/json'
+        }
+      });
+
+      let accumulated = '';
+      for await (const chunk of responseStream) {
+        const text = chunk.text;
+        if (text) {
+          accumulated += text;
+          res.write(`data: ${JSON.stringify({ type: 'chunk', text })}\n\n`);
+        }
+      }
+
+      const geminiOutput = cleanAndParseJSON(accumulated);
+
+      // Handle optional Supabase persistence
+      const authHeader = req.headers.authorization;
+      const token = authHeader && authHeader.split(' ')[1];
+      const supabaseServer = getSupabaseServer();
+      let savedRecord = null;
+
+      if (token && supabaseServer) {
+        const { data: { user }, error: authError } = await supabaseServer.auth.getUser(token);
+        if (user && !authError) {
+          const transformedFeedback = {
+            summary: geminiOutput.summary,
+            key_issues: geminiOutput.issues?.map((i: any) => `[${i.type.toUpperCase()} - ${i.severity.toUpperCase()}] Line ${i.line}: ${i.description}`) || [],
+            suggestions: geminiOutput.suggestions?.map((s: any) => ({
+              issue: `${s.title}: ${s.explanation}`,
+              fix: s.improved_code,
+              line: undefined
+            })) || [],
+            positives: [
+              'Code conforms to industry best practices.',
+              'Logic shows correct semantic understanding.'
+            ]
+          };
+
+          const { data } = await supabaseServer
+            .from('reviews')
+            .insert({
+              user_id: user.id,
+              language,
+              code_snippet: code,
+              overall_score: Number(geminiOutput.overall_score),
+              bug_score: Number(geminiOutput.bug_score),
+              security_score: Number(geminiOutput.security_score),
+              readability_score: Number(geminiOutput.readability_score),
+              complexity_score: Number(geminiOutput.complexity_score),
+              feedback: transformedFeedback
+            })
+            .select()
+            .single();
+
+          savedRecord = data || null;
+        }
+      }
+
+      res.write(`data: ${JSON.stringify({ type: 'done', review: geminiOutput, savedRecord })}\n\n`);
+      res.write('data: [DONE]\n\n');
+      res.end();
+    } catch (err: any) {
+      console.error('Streaming review endpoint error:', err);
+      res.write(`data: ${JSON.stringify({ type: 'error', error: err.message || 'Streaming failure' })}\n\n`);
+      res.end();
+    }
+  });
+
+  // Interactive Follow-up Chat endpoint
+  app.post('/api/review/chat', async (req, res) => {
+    const { code, language, reviewSummary, messages } = req.body;
+
+    if (!code || !messages || !Array.isArray(messages)) {
+      res.status(400).json({ error: 'Missing required parameters: code or messages array.' });
+      return;
+    }
+
+    try {
+      const ai = getGemini();
+
+      const promptHistory = messages
+        .map((m: any) => `${m.role === 'user' ? 'Developer' : 'AI Review Assistant'}: ${m.content}`)
+        .join('\n\n');
+
+      const systemInstruction = `You are AI Review Pro Assistant, an expert senior engineer conversing with a developer about an audited code snippet.
+Context:
+- Language: ${language}
+- Audited Code:
+\`\`\`${language}
+${code}
+\`\`\`
+${reviewSummary ? `- Initial Review Summary: ${reviewSummary}` : ''}
+
+Your Mission:
+Answer the developer's follow-up questions accurately, concisely, and practically.
+- Use GitHub Flavored Markdown with syntax-highlighted code blocks for all code snippets.
+- When suggesting a fix, provide clean, complete, production-ready code that can be directly applied.
+- If asked to write unit tests, use standard frameworks for that language (e.g. Vitest/Jest for JS/TS, pytest for Python, testing package for Go).
+- Be polite, direct, and technically rigorous.`;
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: promptHistory,
+        config: {
+          systemInstruction,
+        }
+      });
+
+      res.json({
+        reply: response.text || 'I have analyzed your follow-up request.'
+      });
+    } catch (err: any) {
+      console.error('Follow-up chat handler failure:', err);
+      res.status(500).json({
+        error: err.message || 'Failed to process follow-up chat message.'
+      });
+    }
+  });
+
 
   // Vite integration middleware
   if (process.env.NODE_ENV !== 'production') {

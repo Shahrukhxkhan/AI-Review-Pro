@@ -8,14 +8,23 @@ import {
   CheckCircle, 
   AlertCircle, 
   Play, 
-  HelpCircle,
-  FileCode,
-  ArrowRight,
-  Download
+  HelpCircle, 
+  FileCode, 
+  ArrowRight, 
+  Download,
+  MessageSquare,
+  Send,
+  Copy,
+  Check,
+  Bot,
+  User,
+  Zap,
+  RotateCcw
 } from 'lucide-react';
 import { exportToJson, exportToMarkdown, exportToPdf } from '@/lib/export';
 import { RadialBarChart, RadialBar, ResponsiveContainer, PolarAngleAxis } from 'recharts';
 import { DiffEditor } from '@monaco-editor/react';
+import { ChatMessage } from '@/types';
 
 interface Issue {
   type: string;
@@ -43,6 +52,7 @@ interface ReviewResultProps {
   };
   originalCodeSnippet: string;
   language: string;
+  onApplySuggestion?: (improvedCode: string) => void;
 }
 
 const mapLanguageToMonaco = (lang: string): string => {
@@ -70,8 +80,22 @@ const mapLanguageToMonaco = (lang: string): string => {
   }
 };
 
-export default function ReviewResult({ review, originalCodeSnippet, language }: ReviewResultProps) {
+export default function ReviewResult({ review, originalCodeSnippet, language, onApplySuggestion }: ReviewResultProps) {
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState<number>(0);
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [appliedIndex, setAppliedIndex] = useState<number | null>(null);
+
+  // Interactive Follow-up Chat State
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
+    {
+      id: 'welcome-msg',
+      role: 'assistant',
+      content: `Hello! I have audited your ${language} code. You can ask me follow-up questions, request alternative refactorings, or ask me to write automated unit tests for this code.`,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    }
+  ]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
 
   const overallScore = Number(review.overall_score || 0);
   const bugScore = Number(review.bug_score || 0);
@@ -92,7 +116,6 @@ export default function ReviewResult({ review, originalCodeSnippet, language }: 
   const readabilityConfig = getScoreColor(readabilityScore);
   const complexityConfig = getScoreColor(complexityScore);
 
-  // Support recharts requirements
   const chartData = [
     {
       name: 'Overall',
@@ -101,102 +124,131 @@ export default function ReviewResult({ review, originalCodeSnippet, language }: 
     }
   ];
 
-  // Backwards compatibility normalizers for fresh API results, local fallbacks, or saved logs
-  const issuesList: Issue[] = [];
-  if (review.issues && Array.isArray(review.issues)) {
-    issuesList.push(...review.issues);
-  } else if ((review as any).feedback?.key_issues && Array.isArray((review as any).feedback.key_issues)) {
-    ((review as any).feedback.key_issues as string[]).forEach((issueStr) => {
-      const regex = /^\[(.*?)\s*-\s*(.*?)\]\s*Line\s*(\d+):\s*(.*)$/i;
-      const match = issueStr.match(regex);
-      if (match) {
-        issuesList.push({
-          type: match[1],
-          severity: (match[2].toLowerCase() as any) || 'medium',
-          line: Number(match[3]),
-          description: match[4]
-        });
-      } else {
-        issuesList.push({
-          type: 'Static Finding',
-          severity: 'medium',
-          line: 1,
-          description: issueStr
-        });
-      }
-    });
-  }
+  const issuesList: Issue[] = review.issues || [];
+  const suggestionsList: Suggestion[] = review.suggestions || [];
+  const executiveSummary = review.summary || 'Code evaluated. No major design vulnerabilities flagged.';
 
-  const suggestionsList: Suggestion[] = [];
-  if (review.suggestions && Array.isArray(review.suggestions)) {
-    suggestionsList.push(...review.suggestions);
-  } else if ((review as any).feedback?.suggestions && Array.isArray((review as any).feedback.suggestions)) {
-    ((review as any).feedback.suggestions as any[]).forEach((s) => {
-      const parts = (s.issue || '').split(': ');
-      const title = parts[0] || 'Refactoring Action';
-      const explanation = parts.slice(1).join(': ') || s.issue || '';
-      suggestionsList.push({
-        title,
-        explanation,
-        improved_code: s.fix || ''
+  const handleCopyCode = (code: string, index: number) => {
+    navigator.clipboard.writeText(code);
+    setCopiedIndex(index);
+    setTimeout(() => setCopiedIndex(null), 2000);
+  };
+
+  const handleApply = (improvedCode: string, index: number) => {
+    if (onApplySuggestion) {
+      onApplySuggestion(improvedCode);
+      setAppliedIndex(index);
+      setTimeout(() => setAppliedIndex(null), 2500);
+    }
+  };
+
+  const handleSendMessage = async (customPrompt?: string) => {
+    const textToSend = customPrompt || chatInput;
+    if (!textToSend.trim() || chatLoading) return;
+
+    const userMessage: ChatMessage = {
+      id: `usr-${Date.now()}`,
+      role: 'user',
+      content: textToSend.trim(),
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+
+    const newHistory = [...chatMessages, userMessage];
+    setChatMessages(newHistory);
+    setChatInput('');
+    setChatLoading(true);
+
+    try {
+      const response = await fetch('/api/review/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: originalCodeSnippet,
+          language,
+          reviewSummary: executiveSummary,
+          messages: newHistory.map(m => ({ role: m.role, content: m.content }))
+        })
       });
-    });
-  }
 
-  const executiveSummary = review.summary || (review as any).feedback?.summary || "No executive summary available.";
+      if (!response.ok) {
+        throw new Error(`Server returned ${response.status}`);
+      }
+
+      const data = await response.json();
+      const assistantMessage: ChatMessage = {
+        id: `ai-${Date.now()}`,
+        role: 'assistant',
+        content: data.reply || 'Analysis complete.',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+      setChatMessages(prev => [...prev, assistantMessage]);
+    } catch (err: any) {
+      console.error('Failed to communicate with review assistant:', err);
+      const errorMessage: ChatMessage = {
+        id: `err-${Date.now()}`,
+        role: 'assistant',
+        content: `Error: ${err.message || 'Failed to generate response. Please verify GEMINI_API_KEY.'}`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+      setChatMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
+  const quickPrompts = [
+    'Can you rewrite this using async/await?',
+    'Write automated unit tests for this code',
+    'How do I fix this without changing DB schema?',
+    'Explain the Big-O time and memory complexity'
+  ];
 
   return (
-    <div id="review-result-container" className="space-y-8 animate-fade-in">
-      <div className="flex justify-end gap-2">
-        <button onClick={() => exportToJson(review as any, 'review')} className="text-xs text-slate-400 hover:text-white flex items-center gap-1"><Download className="h-3 w-3"/> JSON</button>
-        <button onClick={() => exportToMarkdown(review as any, 'review')} className="text-xs text-slate-400 hover:text-white flex items-center gap-1"><Download className="h-3 w-3"/> MD</button>
-        <button onClick={() => exportToPdf(review as any, 'review')} className="text-xs text-slate-400 hover:text-white flex items-center gap-1"><Download className="h-3 w-3"/> PDF</button>
-      </div>
+    <div className="space-y-8 animate-fade-in font-sans">
       
-      {/* 1. Scoreboards & Executive Summary Section */}
+      {/* 1. Header Segment: Overall Score & Executive Summary */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
         
-        {/* Left Side: Circular radial score gauge */}
-        <div className="bg-[#0b0b0e] p-6 rounded-3xl border border-slate-800/80 shadow-xl flex flex-col justify-center items-center text-center space-y-4">
-          <span className="text-[10px] tracking-widest font-black uppercase text-slate-500 font-sans">
-            Overall Security / Code Rating
-          </span>
-          <div className="relative flex items-center justify-center h-44 w-44">
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span id="radial-score-value" className={`text-4xl font-extrabold ${overallConfig.text} leading-none font-sans`}>
-                {overallScore}
-              </span>
-              <span className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mt-1">
-                pts / 100
-              </span>
-            </div>
+        {/* Left Segment: Radial Score Gauge Card */}
+        <div className="bg-[#0b0b0e] p-6 rounded-3xl border border-slate-800/80 shadow-xl flex flex-col items-center justify-center relative overflow-hidden">
+          <div className="w-full flex items-center justify-between border-b border-slate-850 pb-2.5 mb-2">
+            <span className="text-[10px] uppercase tracking-widest font-black text-slate-500 font-sans">
+              Quality Index
+            </span>
+            <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase ${overallConfig.bg} ${overallConfig.text} border ${overallConfig.border}`}>
+              {overallScore >= 80 ? 'Grade A' : overallScore >= 60 ? 'Grade B' : 'Grade C'}
+            </span>
+          </div>
+
+          <div className="relative w-44 h-44 flex items-center justify-center">
             <ResponsiveContainer width="100%" height="100%">
-              <RadialBarChart
-                cx="50%"
-                cy="50%"
-                innerRadius="80%"
-                outerRadius="100%"
-                barSize={12}
-                data={chartData}
-                startAngle={90}
+              <RadialBarChart 
+                cx="50%" 
+                cy="50%" 
+                innerRadius="75%" 
+                outerRadius="100%" 
+                barSize={12} 
+                data={chartData} 
+                startAngle={90} 
                 endAngle={-270}
               >
-                <PolarAngleAxis
-                  type="number"
-                  domain={[0, 100]}
-                  angleAxisId={0}
-                  tick={false}
-                />
-                <RadialBar
-                  background={{ fill: '#1e293b' }}
-                  dataKey="value"
-                  cornerRadius={8}
-                />
+                <PolarAngleAxis type="number" domain={[0, 100]} angleAxisId={0} tick={false} />
+                <RadialBar background={{ fill: '#1e293b' }} dataKey="value" cornerRadius={6} />
               </RadialBarChart>
             </ResponsiveContainer>
+            
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+              <span className={`text-4xl font-mono font-black ${overallConfig.text}`}>
+                {overallScore}
+              </span>
+              <span className="text-[9px] uppercase tracking-widest font-bold text-slate-500 mt-0.5">
+                OUT OF 100
+              </span>
+            </div>
           </div>
-          <span className={`inline-flex px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${overallConfig.bg} ${overallConfig.text} border ${overallConfig.border}`}>
-            {overallScore >= 75 ? 'Optimal Standards' : overallScore >= 50 ? 'Medium Compliance' : 'Severe Risk Alerts'}
+
+          <span className="text-[11px] text-slate-400 font-sans font-medium text-center mt-1">
+            Overall Architecture Health
           </span>
         </div>
 
@@ -214,7 +266,7 @@ export default function ReviewResult({ review, originalCodeSnippet, language }: 
             </p>
           </div>
 
-          {/* 2. Four Smaller Dim Score Badges */}
+          {/* Four Smaller Dim Score Badges */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-[#050507] p-4 rounded-2xl border border-slate-800/60">
             {/* Bugs */}
             <div className="text-center space-y-1">
@@ -257,7 +309,7 @@ export default function ReviewResult({ review, originalCodeSnippet, language }: 
 
       </div>
 
-      {/* 3. Detailed Issues List with Severity Badges */}
+      {/* 2. Detailed Issues List with Severity Badges */}
       <div id="review-issues-section" className="bg-[#0b0b0e] p-6 rounded-3xl border border-slate-800/80 shadow-xl space-y-4">
         <div className="flex items-center justify-between border-b border-slate-850 pb-3.5">
           <div className="flex items-center gap-2">
@@ -315,17 +367,38 @@ export default function ReviewResult({ review, originalCodeSnippet, language }: 
         )}
       </div>
 
-      {/* 4. Suggestions Comparison Layout Segment */}
+      {/* 3. Suggestions Comparison Layout Segment */}
       <div id="review-suggestions-section" className="bg-[#0b0b0e] p-6 rounded-3xl border border-slate-800/80 shadow-xl space-y-6">
         
-        <div className="border-b border-slate-850 pb-3.5">
-          <div className="flex items-center gap-2">
-            <CheckCircle className="h-5 w-5 text-emerald-450" />
-            <h3 className="text-base font-black text-white tracking-tight">Refactoring Suggestions & Code Diffs</h3>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-850 pb-3.5">
+          <div>
+            <div className="flex items-center gap-2">
+              <CheckCircle className="h-5 w-5 text-emerald-450" />
+              <h3 className="text-base font-black text-white tracking-tight">Refactoring Suggestions & Code Diffs</h3>
+            </div>
+            <p className="text-slate-500 text-xs mt-1 leading-relaxed">
+              Compare AI-optimized solutions against the original snippet. Apply refactors directly back to the editor with 1 click.
+            </p>
           </div>
-          <p className="text-slate-500 text-xs mt-1 leading-relaxed">
-            Choose a refactoring card below to expand the side-by-side interactive code diff showing the original snippet compared with the AI-optimized solution.
-          </p>
+
+          {onApplySuggestion && suggestionsList.length > 0 && (
+            <button
+              onClick={() => handleApply(suggestionsList[activeSuggestionIndex]?.improved_code || '', activeSuggestionIndex)}
+              className="bg-accent text-bg px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider hover:opacity-90 transition flex items-center gap-1.5 self-start sm:self-auto cursor-pointer shadow-lg shadow-accent/15"
+            >
+              {appliedIndex === activeSuggestionIndex ? (
+                <>
+                  <Check className="w-3.5 h-3.5" />
+                  <span>Applied to Editor!</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-3.5 h-3.5 fill-current" />
+                  <span>Apply Refactor #{activeSuggestionIndex + 1}</span>
+                </>
+              )}
+            </button>
+          )}
         </div>
 
         {suggestionsList.length === 0 ? (
@@ -333,7 +406,7 @@ export default function ReviewResult({ review, originalCodeSnippet, language }: 
             <CheckCircle className="h-8 w-8 text-indigo-400/80 animate-pulse" />
             <h4 className="text-xs font-bold text-white uppercase tracking-wider">No refactoring recommendations required</h4>
             <p className="text-[10px] text-slate-500 leading-relaxed max-w-[280px]">
-              The analyzed file executes perfectly standard patterns out of the box. No major refactoring needed.
+              The analyzed file executes standard patterns cleanly. No major refactoring needed.
             </p>
           </div>
         ) : (
@@ -361,15 +434,30 @@ export default function ReviewResult({ review, originalCodeSnippet, language }: 
                     <p className="text-[10px] text-slate-400 line-clamp-2 mt-0.5 leading-normal">
                       {suggestion.explanation}
                     </p>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        navigator.clipboard.writeText(suggestion.improved_code);
-                      }}
-                      className="text-[9px] font-bold text-emerald-400 hover:text-emerald-300 mt-1"
-                    >
-                      [ Copy Fix ]
-                    </button>
+                    <div className="flex items-center gap-3 mt-1.5 pt-1.5 border-t border-slate-850/60">
+                      <span
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleCopyCode(suggestion.improved_code, index);
+                        }}
+                        className="text-[9px] font-bold text-emerald-400 hover:underline flex items-center gap-1 cursor-pointer"
+                      >
+                        {copiedIndex === index ? <Check className="w-2.5 h-2.5" /> : <Copy className="w-2.5 h-2.5" />}
+                        {copiedIndex === index ? 'Copied' : 'Copy Fix'}
+                      </span>
+                      {onApplySuggestion && (
+                        <span
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleApply(suggestion.improved_code, index);
+                          }}
+                          className="text-[9px] font-bold text-accent hover:underline flex items-center gap-1 cursor-pointer"
+                        >
+                          <Sparkles className="w-2.5 h-2.5" />
+                          Apply
+                        </span>
+                      )}
+                    </div>
                   </button>
                 );
               })}
@@ -378,16 +466,28 @@ export default function ReviewResult({ review, originalCodeSnippet, language }: 
             {/* Active Refactor Diff Display */}
             <div className="lg:col-span-4 bg-[#050507] p-5 rounded-2xl border border-slate-850 flex flex-col gap-4">
               
-              <div className="space-y-1.5">
-                <span className="text-[10px] font-black uppercase tracking-widest text-[#a855f7] block">
-                  Active Comparison Explanation
-                </span>
-                <h4 className="text-sm font-extrabold text-white">
-                  {suggestionsList[activeSuggestionIndex]?.title}
-                </h4>
-                <p className="text-xs text-slate-400 leading-relaxed font-sans">
-                  {suggestionsList[activeSuggestionIndex]?.explanation}
-                </p>
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-1.5">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-[#a855f7] block">
+                    Active Comparison Explanation
+                  </span>
+                  <h4 className="text-sm font-extrabold text-white">
+                    {suggestionsList[activeSuggestionIndex]?.title}
+                  </h4>
+                  <p className="text-xs text-slate-400 leading-relaxed font-sans">
+                    {suggestionsList[activeSuggestionIndex]?.explanation}
+                  </p>
+                </div>
+
+                {onApplySuggestion && (
+                  <button
+                    onClick={() => handleApply(suggestionsList[activeSuggestionIndex]?.improved_code || '', activeSuggestionIndex)}
+                    className="bg-accent/10 border border-accent/20 text-accent hover:bg-accent hover:text-bg px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider transition shrink-0 flex items-center gap-1 cursor-pointer"
+                  >
+                    <Sparkles className="w-3 h-3" />
+                    Apply Code
+                  </button>
+                )}
               </div>
 
               {/* Side-by-Side Monaco Diff Editor Container */}
@@ -395,12 +495,12 @@ export default function ReviewResult({ review, originalCodeSnippet, language }: 
                 <div className="flex items-center justify-between px-3 py-1.5 bg-[#09090c] rounded-t-xl border-t border-x border-slate-850">
                   <span className="text-[9px] font-mono text-slate-400 flex items-center gap-1.5">
                     <FileCode className="h-3.5 w-3.5 text-slate-500" />
-                    <span>Original Snip</span>
+                    <span>Original Code</span>
                   </span>
                   <ArrowRight className="h-3 w-3 text-slate-650" />
                   <span className="text-[9px] font-mono text-emerald-400 flex items-center gap-1.5">
                     <Sparkles className="h-3.5 w-3.5 text-emerald-400" />
-                    <span>Refactored Output</span>
+                    <span>Refactored Solution</span>
                   </span>
                 </div>
                 
@@ -439,6 +539,118 @@ export default function ReviewResult({ review, originalCodeSnippet, language }: 
 
           </div>
         )}
+
+      </div>
+
+      {/* 4. Interactive Follow-up Chat: "Ask AI About This Review" */}
+      <div id="review-chat-section" className="bg-[#0b0b0e] p-6 rounded-3xl border border-slate-800/80 shadow-xl space-y-5">
+        
+        <div className="flex items-center justify-between border-b border-slate-850 pb-3.5">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-xl bg-accent/10 text-accent border border-accent/20">
+              <MessageSquare className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-base font-black text-white tracking-tight">Interactive Follow-up Assistant</h3>
+              <p className="text-xs text-slate-500">Ask clarifying questions, request alternative patterns, or generate unit tests</p>
+            </div>
+          </div>
+          <span className="text-[10px] font-mono font-bold uppercase px-2.5 py-1 rounded bg-slate-900 text-slate-400 border border-slate-800">
+            Gemini 2.5 Flash
+          </span>
+        </div>
+
+        {/* Quick Prompt Chips */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
+          <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider shrink-0">Quick Ask:</span>
+          {quickPrompts.map((prompt, idx) => (
+            <button
+              key={idx}
+              disabled={chatLoading}
+              onClick={() => handleSendMessage(prompt)}
+              className="text-[11px] font-medium bg-[#050507] border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white px-3 py-1 rounded-full whitespace-nowrap transition cursor-pointer disabled:opacity-50"
+            >
+              {prompt}
+            </button>
+          ))}
+        </div>
+
+        {/* Chat History Box */}
+        <div className="space-y-3 max-h-[360px] overflow-y-auto pr-2 scrollbar-thin bg-[#050507] p-4 rounded-2xl border border-slate-800/80">
+          {chatMessages.map((msg) => {
+            const isUser = msg.role === 'user';
+            return (
+              <div 
+                key={msg.id} 
+                className={`flex gap-3 text-xs leading-relaxed ${isUser ? 'justify-end' : 'justify-start'}`}
+              >
+                {!isUser && (
+                  <div className="w-7 h-7 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0 mt-0.5">
+                    <Bot className="w-4 h-4" />
+                  </div>
+                )}
+                <div 
+                  className={`max-w-[85%] p-3.5 rounded-2xl space-y-1.5 ${
+                    isUser 
+                      ? 'bg-indigo-600 text-white rounded-tr-none' 
+                      : 'bg-[#0f0f14] border border-slate-800 text-slate-300 rounded-tl-none font-sans'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-4 text-[9px] opacity-60 font-mono">
+                    <span>{isUser ? 'You' : 'AI Review Pro'}</span>
+                    <span>{msg.timestamp}</span>
+                  </div>
+                  <div className="whitespace-pre-wrap font-sans text-xs">
+                    {msg.content}
+                  </div>
+                </div>
+                {isUser && (
+                  <div className="w-7 h-7 rounded-lg bg-accent/10 border border-accent/20 text-accent flex items-center justify-center shrink-0 mt-0.5">
+                    <User className="w-4 h-4" />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+          {chatLoading && (
+            <div className="flex gap-3 text-xs justify-start items-center">
+              <div className="w-7 h-7 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0">
+                <Bot className="w-4 h-4" />
+              </div>
+              <div className="bg-[#0f0f14] border border-slate-800 p-3 rounded-2xl rounded-tl-none text-slate-400 flex items-center gap-2">
+                <div className="w-3 h-3 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                <span>Generating explanation...</span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Input Bar */}
+        <form 
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleSendMessage();
+          }}
+          className="flex items-center gap-2"
+        >
+          <input
+            type="text"
+            value={chatInput}
+            onChange={(e) => setChatInput(e.target.value)}
+            disabled={chatLoading}
+            placeholder="Ask anything about this code review (e.g. 'Can you convert this to TypeScript interfaces?')..."
+            className="flex-1 bg-[#050507] border border-slate-800 rounded-xl px-4 py-3 text-xs text-white placeholder-slate-500 outline-none focus:border-accent transition disabled:opacity-50"
+          />
+          <button
+            type="submit"
+            disabled={chatLoading || !chatInput.trim()}
+            className="bg-accent text-bg px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider hover:opacity-90 transition disabled:opacity-40 cursor-pointer flex items-center gap-1.5 shadow-lg shadow-accent/10"
+          >
+            <Send className="w-3.5 h-3.5" />
+            <span>Send</span>
+          </button>
+        </form>
 
       </div>
 

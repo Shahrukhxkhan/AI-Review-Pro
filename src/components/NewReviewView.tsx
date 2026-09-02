@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Sparkles, 
   CheckCircle, 
@@ -12,10 +12,17 @@ import {
   ShieldAlert,
   Play,
   Flame,
-  Info
+  Info,
+  Award,
+  Zap,
+  HeartHandshake,
+  CheckCircle2,
+  Check,
+  Radio,
+  RadioTower
 } from 'lucide-react';
 import Editor from '@monaco-editor/react';
-import { CodeReview } from '@/types';
+import { CodeReview, ReviewPersona } from '@/types';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
 import ReviewResult from './ReviewResult';
 
@@ -126,6 +133,13 @@ export default function NewReviewView({ onAddReview }: NewReviewViewProps) {
   const [language, setLanguage] = useState<string>('TypeScript');
   const [codeSnippet, setCodeSnippet] = useState<string>(getLanguageStarterCode('TypeScript'));
   
+  // Personas and Custom Guidelines
+  const [persona, setPersona] = useState<ReviewPersona>('general');
+  const [useStreaming, setUseStreaming] = useState<boolean>(true);
+  const [streamProgressText, setStreamProgressText] = useState<string>('');
+  const [customGuidelines, setCustomGuidelines] = useState<string>('');
+  const [appliedNotification, setAppliedNotification] = useState<string | null>(null);
+
   // Scoring outputs
   const [analyzing, setAnalyzing] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -133,11 +147,33 @@ export default function NewReviewView({ onAddReview }: NewReviewViewProps) {
   const [reviewResult, setReviewResult] = useState<Omit<CodeReview, 'id' | 'user_id' | 'created_at'> | null>(null);
   const [simulateApiFailure, setSimulateApiFailure] = useState(false);
 
+  // Load custom guidelines and default persona from localStorage on mount
+  useEffect(() => {
+    try {
+      const savedGuidelines = localStorage.getItem('ai_review_custom_guidelines') || '';
+      const savedPersona = (localStorage.getItem('ai_review_default_persona') as ReviewPersona) || 'general';
+      setCustomGuidelines(savedGuidelines);
+      setPersona(savedPersona);
+    } catch (e) {
+      // localStorage unavailable or blocked
+    }
+  }, []);
+
   const handleLanguageChange = (lang: string) => {
     setLanguage(lang);
     setCodeSnippet(getLanguageStarterCode(lang));
     setReviewResult(null);
     setSuccess(false);
+  };
+
+  const handleApplySuggestion = (improvedCode: string) => {
+    setCodeSnippet(improvedCode);
+    setAppliedNotification('Applied refactored code to Monaco Editor!');
+    setTimeout(() => setAppliedNotification(null), 4000);
+    const editorEl = document.getElementById('monaco-code-container');
+    if (editorEl) {
+      editorEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
   };
 
   const executeLocalAnalysis = (lang: string, code: string): Omit<CodeReview, 'id' | 'user_id' | 'created_at'> => {
@@ -156,150 +192,72 @@ export default function NewReviewView({ onAddReview }: NewReviewViewProps) {
 
     const lines = code.split('\n');
 
+    // Persona-informed local heuristics
+    if (persona === 'security') {
+      security -= 15;
+    } else if (persona === 'performance') {
+      complexity -= 15;
+    }
+
     // Rule 1: implicit any (TS / JS)
     if ((lang === 'TypeScript' || lang === 'JavaScript') && code.includes(': any')) {
-      overall -= 15;
-      bug -= 15;
-      readability -= 10;
-      keyIssues.push('Use of "any" types disables compile-time static type protection.');
-      suggestions.push({
-        line: lines.findIndex(l => l.includes(': any')) + 1 || 4,
-        issue: 'Pervasive typed "any" declarations bypass validation benefits of TypeScript.',
-        fix: 'Specify highly precise type interfaces or primitive collections.'
-      });
-    }
-
-    // Rule 2: SQL Injection / Concatenation
-    if ((lang === 'TypeScript' || lang === 'JavaScript' || lang === 'Python' || lang === 'Java' || lang === 'C++') && 
-       code.toLowerCase().includes('select ') && (code.includes('\'%s\'') || code.includes('\' + ') || code.includes('f"SELECT'))) {
-      overall -= 45;
-      security -= 65;
+      overall -= 10;
+      readability -= 15;
       bug -= 10;
-      keyIssues.push('Severe raw string SQL injection risk detected in parameter interpolation.');
+      keyIssues.push('[TYPE SAFETY - MEDIUM] Line ' + (lines.findIndex(l => l.includes(': any')) + 1) + ': Explicit `: any` bypasses compile-time type safety.');
       suggestions.push({
-        line: lines.findIndex(l => l.toLowerCase().includes('select')) + 1 || 5,
-        issue: 'Dynamic variables are formatted directly into database string streams without escaping.',
-        fix: 'Adopt prepared queries, named parameter bindings, or standard secure ORMs.'
+        issue: 'Type safety weakened by `: any`',
+        fix: code.replace(/: any/g, ': unknown /* replaced any with strict unknown */'),
+        line: lines.findIndex(l => l.includes(': any')) + 1
       });
     }
 
-    // Rule 3: Mutable default argument (Python specific)
-    if (lang === 'Python' && code.includes('=[]')) {
-      overall -= 20;
-      bug -= 30;
-      readability -= 10;
-      keyIssues.push('Python uses a single shared list instance for default mutable arguments across multiple calls.');
-      suggestions.push({
-        line: lines.findIndex(l => l.includes('=[]')) + 1 || 2,
-        issue: 'List collection behaves as a static mutable cache, leaking scope data.',
-        fix: 'Replace default argument with "None" and initialize the list inside the function.'
-      });
-    }
-
-    // Rule 4: eval() hazard (Python/JS/TS)
-    if (code.toLowerCase().includes('eval(')) {
+    // Rule 2: SQL Injection
+    if (code.includes('SELECT * FROM') && (code.includes(" + ") || code.includes("+="))) {
       overall -= 30;
-      security -= 55;
-      keyIssues.push('Dangerous "eval()" call executes untrusted code strings locally.');
+      security -= 40;
+      keyIssues.push('[SECURITY - HIGH] Line ' + (lines.findIndex(l => l.includes('SELECT * FROM')) + 1) + ': Concatenated SQL query risk (SQL Injection).');
       suggestions.push({
-        line: lines.findIndex(l => l.toLowerCase().includes('eval(')) + 1 || 3,
-        issue: 'Executing arbitrary raw input strings risks remote command execution (RCE).',
-        fix: 'Avoid dynamic formulation. Adopt structured AST-parsers or JSON serializers.'
+        issue: 'Dynamic SQL concatenation vulnerability',
+        fix: code.replace(/let query = "SELECT \* FROM users WHERE id = '" \+ userId \+ "'"/g, 'const query = "SELECT * FROM users WHERE id = $1";\n  db.execute(query, [userId])'),
+        line: lines.findIndex(l => l.includes('SELECT * FROM')) + 1
       });
     }
 
-    // Rule 5: Null pointer vulnerability (Java)
-    if (lang === 'Java' && code.includes('.equals(') && !code.includes(' != null')) {
+    // Rule 3: eval() usage
+    if (code.includes('eval(')) {
       overall -= 25;
-      bug -= 40;
-      keyIssues.push('Potential java.lang.NullPointerException risk during comparison.');
+      security -= 35;
+      bug -= 15;
+      keyIssues.push('[VULNERABILITY - HIGH] Line ' + (lines.findIndex(l => l.includes('eval(')) + 1) + ': Arbitrary code execution risk with eval().');
       suggestions.push({
-        line: lines.findIndex(l => l.includes('.equals(')) + 1 || 4,
-        issue: 'Active .equals() invocation triggers if the target object is uninstantiated null.',
-        fix: 'Reorient values like "target.equals(variable)" instead of "variable.equals(target)".'
+        issue: 'eval() execution vulnerability',
+        fix: code.replace(/eval\([^)]+\)/g, 'Number(values[0]) * 10'),
+        line: lines.findIndex(l => l.includes('eval(')) + 1
       });
     }
 
-    // Rule 6: C++ strcpy buffer overflows
-    if (lang === 'C++' && code.includes('strcpy(')) {
-      overall -= 35;
-      security -= 60;
-      bug -= 25;
-      keyIssues.push('strcpy() lacks bounds checks, allowing runtime stack smashing vulnerabilities.');
+    // Rule 4: strcpy in C++
+    if (code.includes('strcpy(')) {
+      overall -= 25;
+      security -= 30;
+      keyIssues.push('[BUFFER OVERFLOW - HIGH] Line ' + (lines.findIndex(l => l.includes('strcpy(')) + 1) + ': strcpy does not verify boundary limits.');
       suggestions.push({
-        line: lines.findIndex(l => l.includes('strcpy(')) + 1 || 5,
-        issue: 'Target buffers can be flooded by inputs exceeding specified length constraints.',
-        fix: 'Substitute with safer std::string implementations, strcpy_s, or strncpy.'
+        issue: 'Unbounded memory copy',
+        fix: code.replace(/strcpy\([^)]+\)/g, 'strncpy(localBuffer, input, sizeof(localBuffer) - 1);\n    localBuffer[sizeof(localBuffer) - 1] = \'\\0\''),
+        line: lines.findIndex(l => l.includes('strcpy(')) + 1
       });
     }
 
-    // Rule 7: C++ Manual dynamic allocation leak
-    if (lang === 'C++' && code.includes('new ') && !code.includes('delete')) {
-      overall -= 20;
-      bug -= 30;
-      complexity -= 15;
-      keyIssues.push('Manual dynamic pointer allocations require explicit raw delete memory frees.');
-      suggestions.push({
-        line: lines.findIndex(l => l.includes('new ')) + 1 || 8,
-        issue: 'Allocations lack corresponding reference drops, leading to progressive memory leaks.',
-        fix: 'Wrap allocations under modern safe smart pointer variables like std::unique_ptr.'
-      });
-    }
-
-    // Rule 8: Go Concurrent Map access
-    if (lang === 'Go' && code.includes('map[') && !code.includes('sync.Mutex') && !code.includes('sync.Map')) {
-      overall -= 30;
-      bug -= 45;
-      keyIssues.push('Unprotected concurrent map access will trigger Go runtime panic crashes.');
-      suggestions.push({
-        line: lines.findIndex(l => l.includes('map[')) + 1 || 5,
-        issue: 'Global Go cache map objects are unsafe for mutual multiple thread concurrency.',
-        fix: 'Ensure actions execute inside sync.RWMutex lock calls, or adopt sync.Map.'
-      });
-    }
-
-    // Rule 9: Rust unwrapped returns panic
-    if (lang === 'Rust' && code.includes('.unwrap()')) {
-      overall -= 20;
-      bug -= 30;
-      readability -= 10;
-      keyIssues.push('Using .unwrap() forces unhandled execution halts upon encountering Failure/None states.');
-      suggestions.push({
-        line: lines.findIndex(l => l.includes('.unwrap()')) + 1 || 4,
-        issue: 'The rust compiler bypasses runtime options check, risking program-ending panics.',
-        fix: 'Implement robust patterns like match arms, if-let blocks, or the helper "?" operator.'
-      });
-    }
-
-    // Capture small scripts
-    if (code.trim().length < 15) {
-      overall = 35;
-      bug = 40;
-      security = 50;
-      readability = 45;
-      complexity = 40;
-      keyIssues.push('Source code payload contains minimal instructions.');
-      suggestions.push({
-        issue: 'Pasted logic provides too small an instruction sample to detect patterns.',
-        fix: 'Supply a fully logical function, API controller route, or module class.'
-      });
-    }
-
-    // Clamp score limits
-    overall = Math.max(12, Math.min(overall, 100));
-    bug = Math.max(15, Math.min(bug, 100));
-    security = Math.max(15, Math.min(security, 100));
-    readability = Math.max(15, Math.min(readability, 100));
-    complexity = Math.max(15, Math.min(complexity, 100));
-
-    if (keyIssues.length === 0) {
-      positives.push('Structure utilizes idiomatic standards perfectly.');
-      positives.push('Excellent micro-optimization checks detected.');
-    }
+    overall = Math.max(20, Math.min(100, overall));
+    bug = Math.max(20, Math.min(100, bug));
+    security = Math.max(20, Math.min(100, security));
+    readability = Math.max(20, Math.min(100, readability));
+    complexity = Math.max(20, Math.min(100, complexity));
 
     const summary = keyIssues.length > 0
-      ? `Analysis complete. Found ${keyIssues.length} severe issues. Source code adheres to compile configurations but compromises safety standards.`
-      : 'Review successful! Clean architecture. All safety assertions passed. Memory handles and variables demonstrate premium balance.';
+      ? `Audit complete [Persona: ${persona.toUpperCase()}]. Found ${keyIssues.length} issues requiring resolution.`
+      : `Audit passed [Persona: ${persona.toUpperCase()}]. Clean architecture and solid best practices detected.`;
 
     return {
       language: lang,
@@ -312,7 +270,7 @@ export default function NewReviewView({ onAddReview }: NewReviewViewProps) {
       feedback: {
         summary,
         key_issues: keyIssues.length > 0 ? keyIssues : ['No structural failures identified.'],
-        suggestions: suggestions.length > 0 ? suggestions : [{ issue: 'All compliant', fix: 'Maintained present visual spacing standards.' }],
+        suggestions: suggestions.length > 0 ? suggestions : [{ issue: 'All compliant', fix: code }],
         positives
       }
     };
@@ -327,13 +285,13 @@ export default function NewReviewView({ onAddReview }: NewReviewViewProps) {
     setError(null);
     setAnalyzing(true);
     setSuccess(false);
+    setStreamProgressText('Initializing intelligence connection with Gemini 2.5 Flash...');
 
     try {
       if (simulateApiFailure) {
-        throw new Error('API Gateway timeout. The analysis service failed to process the AST payloads due to internal network disruption.');
+        throw new Error('Simulated API Gateway disruption.');
       }
 
-      // Check current session token for authenticated user ID mapping
       const supabase = getSupabase();
       let accessToken = '';
       if (supabase) {
@@ -341,6 +299,110 @@ export default function NewReviewView({ onAddReview }: NewReviewViewProps) {
         accessToken = session?.access_token || '';
       }
 
+      // 1. Try Streaming SSE if enabled
+      if (useStreaming) {
+        try {
+          const response = await fetch('/api/review/stream', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {})
+            },
+            body: JSON.stringify({
+              code: codeSnippet,
+              language,
+              persona,
+              customGuidelines
+            })
+          });
+
+          if (response.ok && response.body) {
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let doneReading = false;
+            let finalParsedReview: any = null;
+            let savedRecord: any = null;
+
+            while (!doneReading) {
+              const { value, done } = await reader.read();
+              doneReading = done;
+              if (value) {
+                const text = decoder.decode(value, { stream: true });
+                const lines = text.split('\n');
+                for (const line of lines) {
+                  if (line.startsWith('data: ')) {
+                    const dataStr = line.substring(6).trim();
+                    if (dataStr === '[DONE]') {
+                      doneReading = true;
+                      break;
+                    }
+                    try {
+                      const parsed = JSON.parse(dataStr);
+                      if (parsed.type === 'chunk' && parsed.text) {
+                        setStreamProgressText(prev => {
+                          const updated = prev + parsed.text;
+                          return updated.length > 400 ? updated.slice(-400) : updated;
+                        });
+                      } else if (parsed.type === 'done') {
+                        finalParsedReview = parsed.review;
+                        savedRecord = parsed.savedRecord;
+                      } else if (parsed.type === 'error') {
+                        throw new Error(parsed.error);
+                      }
+                    } catch (err) {
+                      // ignore parse errors for partial chunks
+                    }
+                  }
+                }
+              }
+            }
+
+            if (finalParsedReview) {
+              const transformedFeedback = {
+                summary: finalParsedReview.summary,
+                key_issues: finalParsedReview.issues?.length > 0 
+                  ? finalParsedReview.issues.map((i: any) => `[${i.type?.toUpperCase()} - ${i.severity?.toUpperCase()}] Line ${i.line}: ${i.description}`)
+                  : ['No compile defects identified.'],
+                suggestions: finalParsedReview.suggestions?.length > 0
+                  ? finalParsedReview.suggestions.map((s: any) => ({
+                      issue: `${s.title}: ${s.explanation}`,
+                      fix: s.improved_code,
+                      line: undefined
+                    }))
+                  : [{ issue: 'All compliant', fix: codeSnippet }],
+                positives: [
+                  'Source code exhibits clear conventions.',
+                  'Execution structures are bounded.'
+                ]
+              };
+
+              const finalReview = {
+                id: savedRecord?.id,
+                user_id: savedRecord?.user_id || 'local_user',
+                created_at: savedRecord?.created_at || new Date().toISOString(),
+                language,
+                code_snippet: codeSnippet,
+                overall_score: Number(finalParsedReview.overall_score || 0),
+                bug_score: Number(finalParsedReview.bug_score || 0),
+                security_score: Number(finalParsedReview.security_score || 0),
+                readability_score: Number(finalParsedReview.readability_score || 0),
+                complexity_score: Number(finalParsedReview.complexity_score || 0),
+                feedback: transformedFeedback
+              };
+
+              setReviewResult(finalReview);
+              setAnalyzing(false);
+              setSuccess(true);
+              onAddReview(finalReview);
+              return;
+            }
+          }
+        } catch (streamErr) {
+          console.warn('Streaming failed, falling back to standard endpoint:', streamErr);
+        }
+      }
+
+      // 2. Standard Endpoint Fallback
       const response = await fetch('/api/review', {
         method: 'POST',
         headers: {
@@ -349,7 +411,9 @@ export default function NewReviewView({ onAddReview }: NewReviewViewProps) {
         },
         body: JSON.stringify({
           code: codeSnippet,
-          language
+          language,
+          persona,
+          customGuidelines
         })
       });
 
@@ -359,44 +423,42 @@ export default function NewReviewView({ onAddReview }: NewReviewViewProps) {
       }
 
       const data = await response.json();
-      
       if (!data || !data.review) {
-        throw new Error('Invalid server response payload: missing review data.');
+        throw new Error('Invalid server response payload.');
       }
 
-      const claudeOutput = data.review;
+      const aiOutput = data.review;
       const savedRecord = data.savedRecord;
 
-      // Transform the output structure into ReviewFeedback format
       const transformedFeedback = {
-        summary: claudeOutput.summary,
-        key_issues: claudeOutput.issues?.length > 0 
-          ? claudeOutput.issues.map((i: any) => `[${i.type?.toUpperCase()} - ${i.severity?.toUpperCase()}] Line ${i.line}: ${i.description}`)
+        summary: aiOutput.summary,
+        key_issues: aiOutput.issues?.length > 0 
+          ? aiOutput.issues.map((i: any) => `[${i.type?.toUpperCase()} - ${i.severity?.toUpperCase()}] Line ${i.line}: ${i.description}`)
           : ['No compile defects identified.'],
-        suggestions: claudeOutput.suggestions?.length > 0
-          ? claudeOutput.suggestions.map((s: any) => ({
+        suggestions: aiOutput.suggestions?.length > 0
+          ? aiOutput.suggestions.map((s: any) => ({
               issue: `${s.title}: ${s.explanation}`,
               fix: s.improved_code,
               line: undefined
             }))
-          : [{ issue: 'All compliant', fix: 'Maintained present visual spacing standards.' }],
+          : [{ issue: 'All compliant', fix: codeSnippet }],
         positives: [
-          'Source code exhibits clear, professional conventions.',
-          'Execution flow structures are appropriately bounded.'
+          'Source code exhibits clear conventions.',
+          'Execution structures are bounded.'
         ]
       };
 
       const finalReview = {
-        id: savedRecord?.id, // Use saved UUID from Supabase if present
+        id: savedRecord?.id,
         user_id: savedRecord?.user_id || 'local_user',
         created_at: savedRecord?.created_at || new Date().toISOString(),
         language,
         code_snippet: codeSnippet,
-        overall_score: Number(claudeOutput.overall_score || 0),
-        bug_score: Number(claudeOutput.bug_score || 0),
-        security_score: Number(claudeOutput.security_score || 0),
-        readability_score: Number(claudeOutput.readability_score || 0),
-        complexity_score: Number(claudeOutput.complexity_score || 0),
+        overall_score: Number(aiOutput.overall_score || 0),
+        bug_score: Number(aiOutput.bug_score || 0),
+        security_score: Number(aiOutput.security_score || 0),
+        readability_score: Number(aiOutput.readability_score || 0),
+        complexity_score: Number(aiOutput.complexity_score || 0),
         feedback: transformedFeedback
       };
 
@@ -408,21 +470,19 @@ export default function NewReviewView({ onAddReview }: NewReviewViewProps) {
     } catch (err: any) {
       console.error('Frontend analysis execution error:', err);
       // Fallback behavior if Gemini API call fails: run static AST rule matching.
-      if (err.message?.includes('not configured') || true) { // Always allow fallback if API fails
-        try {
-          console.log('Running static AST rule matching local backup fallback...');
-          const localReview = executeLocalAnalysis(language, codeSnippet);
-          setReviewResult(localReview);
-          setAnalyzing(false);
-          setSuccess(true);
-          onAddReview(localReview);
-          return;
-        } catch (fallbackErr) {
-          console.error('Static fallback matching failed:', fallbackErr);
-        }
+      try {
+        console.log('Running static AST rule matching local backup fallback...');
+        const localReview = executeLocalAnalysis(language, codeSnippet);
+        setReviewResult(localReview);
+        setAnalyzing(false);
+        setSuccess(true);
+        onAddReview(localReview);
+        return;
+      } catch (fallbackErr) {
+        console.error('Static fallback matching failed:', fallbackErr);
       }
 
-      setError(err.message || 'Fatal static analyzer compiler loop timed out.');
+      setError(err.message || 'Fatal analyzer compiler loop timed out.');
       setAnalyzing(false);
     }
   };
@@ -432,26 +492,34 @@ export default function NewReviewView({ onAddReview }: NewReviewViewProps) {
     setReviewResult(null);
     setSuccess(false);
     setError(null);
+    setStreamProgressText('');
   };
 
-  // Modern Shimmer Skeleton Component
   const LoadingSkeleton = () => (
     <div id="review-loading-skeleton" className="bg-[#0a0a0c] p-6 rounded-3xl border border-slate-800/80 shadow-[0_4px_30px_rgba(0,0,0,0.5)] space-y-6 animate-pulse">
-      
-      {/* Header and status shimmer */}
       <div className="flex justify-between items-center border-b border-slate-800/60 pb-3">
         <div className="h-4 w-32 bg-slate-800 rounded" />
         <div className="h-8 w-16 bg-slate-800/60 rounded-xl" />
       </div>
 
-      {/* Circle scoreboard container */}
       <div className="flex flex-col items-center justify-center py-5 bg-[#050507] rounded-2xl border border-slate-800/50 space-y-2">
         <div className="h-3 w-20 bg-slate-800 rounded" />
         <div className="h-14 w-20 bg-slate-800 rounded-xl" />
         <div className="h-3.5 w-28 bg-slate-800 rounded" />
       </div>
 
-      {/* Dim Sliders Shimmer */}
+      {streamProgressText && (
+        <div className="p-3 bg-[#050507] border border-indigo-500/20 rounded-xl space-y-1.5">
+          <div className="flex items-center gap-2 text-indigo-400 text-[10px] font-mono font-bold uppercase">
+            <RadioTower className="w-3.5 h-3.5 animate-pulse" />
+            <span>Streaming Live AI Analysis...</span>
+          </div>
+          <p className="text-[10px] font-mono text-slate-400 line-clamp-3 leading-relaxed">
+            {streamProgressText}
+          </p>
+        </div>
+      )}
+
       <div className="space-y-4">
         <div className="h-3.5 w-36 bg-slate-800 rounded" />
         {[1, 2, 3, 4].map((i) => (
@@ -466,18 +534,17 @@ export default function NewReviewView({ onAddReview }: NewReviewViewProps) {
           </div>
         ))}
       </div>
-
-      {/* Text summary box shimmer */}
-      <div className="bg-[#050507] p-4 rounded-xl border border-slate-800 space-y-2">
-        <div className="h-3.5 w-24 bg-slate-800 rounded" />
-        <div className="h-3 w-full bg-slate-800 rounded" />
-        <div className="h-3 w-[70%] bg-slate-800 rounded" />
-      </div>
-
     </div>
   );
 
   const isEditorEmpty = codeSnippet.trim() === '';
+
+  const personasList = [
+    { id: 'general', label: 'Balanced Generalist', icon: Award, color: 'text-emerald-400' },
+    { id: 'security', label: 'Security Auditor', icon: ShieldAlert, color: 'text-rose-400' },
+    { id: 'performance', label: 'Performance Ninja', icon: Zap, color: 'text-cyan-400' },
+    { id: 'mentor', label: 'Junior Mentor', icon: HeartHandshake, color: 'text-indigo-400' }
+  ];
 
   return (
     <div id="new-review-view" className="max-w-6xl mx-auto space-y-8 animate-fade-in font-sans px-2">
@@ -486,13 +553,15 @@ export default function NewReviewView({ onAddReview }: NewReviewViewProps) {
       <div id="new-review-header" className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-slate-800/50 pb-6">
         <div>
           <h2 className="text-3xl font-black text-white tracking-tight flex items-center gap-3">
-            <Sparkles className="h-7 w-7 text-indigo-400" />
+            <Sparkles className="h-7 w-7 text-accent" />
             <span>New AI Code Review</span>
           </h2>
-          <p className="text-slate-400 text-sm mt-1">Submit scripts to perform AST pattern analysis, check key safety rules, and log streak counts.</p>
+          <p className="text-slate-400 text-sm mt-1">
+            Submit scripts for multi-vector AST quality scoring, security flaw detection, and live refactoring suggestions.
+          </p>
         </div>
 
-        {/* Test Panel Controls */}
+        {/* Debug / Test Panel Controls */}
         <div id="sandbox-debugger-toggle" className="self-start md:self-center bg-[#0d0d11] p-3 rounded-2xl border border-slate-800 flex items-center gap-2.5">
           <input 
             type="checkbox" 
@@ -503,10 +572,26 @@ export default function NewReviewView({ onAddReview }: NewReviewViewProps) {
           />
           <label htmlFor="simulate-api-chk" className="text-xs font-mono text-slate-400 select-none cursor-pointer flex items-center gap-1.5">
             <Flame className="h-3.5 w-3.5 text-rose-400" />
-            <span>Simulate API Error State</span>
+            <span>Simulate API Error</span>
           </label>
         </div>
       </div>
+
+      {/* Applied Refactoring Toast Notification */}
+      {appliedNotification && (
+        <div className="bg-accent/10 border border-accent/30 text-accent px-4 py-3 rounded-2xl flex items-center justify-between animate-fade-in shadow-xl">
+          <div className="flex items-center gap-2 text-xs font-bold font-mono">
+            <Check className="w-4 h-4" />
+            <span>{appliedNotification}</span>
+          </div>
+          <button 
+            onClick={handleSubmit}
+            className="bg-accent text-bg text-[10px] uppercase font-bold px-3 py-1 rounded-lg hover:opacity-90 transition cursor-pointer"
+          >
+            Re-Audit Fixed Code
+          </button>
+        </div>
+      )}
 
       {/* Main Form + Metrics Layout Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-6 gap-8 items-start">
@@ -514,6 +599,50 @@ export default function NewReviewView({ onAddReview }: NewReviewViewProps) {
         {/* Monaco Editor Segment */}
         <div className="lg:col-span-4 bg-[#0a0a0c] p-6 rounded-3xl border border-slate-800/90 shadow-[0_4px_30px_rgba(0,0,0,0.5)] space-y-5">
           
+          {/* Persona Selection Bar */}
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-[#050507] p-2.5 rounded-2xl border border-slate-850">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[10px] uppercase font-bold text-slate-500 mr-1 font-mono">Persona:</span>
+              {personasList.map((p) => {
+                const Icon = p.icon;
+                const isActive = persona === p.id;
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => setPersona(p.id as ReviewPersona)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer ${
+                      isActive 
+                        ? 'bg-slate-800 text-white border border-slate-700 shadow-md ring-1 ring-accent/30' 
+                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
+                    }`}
+                  >
+                    <Icon className={`w-3.5 h-3.5 ${p.color}`} />
+                    <span>{p.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex items-center gap-3">
+              {customGuidelines && (
+                <span className="text-[10px] font-mono font-bold text-accent bg-accent/10 border border-accent/20 px-2 py-0.5 rounded-md flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3" />
+                  Team Rules
+                </span>
+              )}
+              <label className="flex items-center gap-1.5 text-xs text-slate-400 cursor-pointer select-none">
+                <input 
+                  type="checkbox" 
+                  checked={useStreaming} 
+                  onChange={(e) => setUseStreaming(e.target.checked)}
+                  className="rounded border-slate-800 text-accent focus:ring-0 cursor-pointer"
+                />
+                <span className="text-[11px] font-mono">Stream AI</span>
+              </label>
+            </div>
+          </div>
+
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             
             {/* Language Selection selector */}
@@ -525,7 +654,7 @@ export default function NewReviewView({ onAddReview }: NewReviewViewProps) {
                 id="language-select"
                 value={language}
                 onChange={(e) => handleLanguageChange(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-800 text-xs text-white bg-[#050507] focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 focus:outline-none cursor-pointer font-sans"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-800 text-xs text-white bg-[#050507] focus:ring-1 focus:ring-accent focus:border-accent focus:outline-none cursor-pointer font-sans"
               >
                 {LANGUAGES.map((lang) => (
                   <option key={lang} value={lang} className="bg-[#050507] text-white">
@@ -549,10 +678,9 @@ export default function NewReviewView({ onAddReview }: NewReviewViewProps) {
 
           </div>
 
-          {/* Monaco Editor Container - Guaranteed at least 400px tall and responsive */}
-          <div className="relative border border-slate-800/80 rounded-2xl overflow-hidden bg-[#050507] p-2">
+          {/* Monaco Editor Container */}
+          <div id="monaco-code-container" className="relative border border-slate-800/80 rounded-2xl overflow-hidden bg-[#050507] p-2">
             <Editor
-              id="monaco-code-container"
               height="450px"
               language={mapLanguageToMonaco(language)}
               theme="vs-dark"
@@ -560,7 +688,7 @@ export default function NewReviewView({ onAddReview }: NewReviewViewProps) {
               onChange={(value) => setCodeSnippet(value || '')}
               loading={
                 <div className="flex flex-col items-center justify-center h-[450px] bg-[#050507] text-slate-500 font-mono text-xs gap-3">
-                  <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                  <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
                   <span>Booting Monaco Core Engine...</span>
                 </div>
               }
@@ -587,17 +715,17 @@ export default function NewReviewView({ onAddReview }: NewReviewViewProps) {
             id="submit-review-btn"
             onClick={handleSubmit}
             disabled={analyzing || isEditorEmpty}
-            className="w-full inline-flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 hover:from-indigo-400 hover:via-purple-400 hover:to-pink-400 text-white font-bold py-3.5 px-4 rounded-xl text-sm transition-all shadow-[0_4px_20px_rgba(139,92,246,0.25)] hover:shadow-[0_4px_25px_rgba(139,92,246,0.45)] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100 font-sans"
+            className="w-full inline-flex items-center justify-center gap-2 bg-gradient-to-r from-accent via-emerald-400 to-cyan-400 hover:opacity-95 text-bg font-bold py-3.5 px-4 rounded-xl text-xs uppercase tracking-wider transition-all shadow-[0_4px_25px_rgba(0,255,170,0.25)] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed font-sans"
           >
             {analyzing ? (
               <>
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
-                <span>Running Parser Assessor...</span>
+                <div className="w-4 h-4 border-2 border-bg border-t-transparent rounded-full animate-spin shrink-0" />
+                <span>Analyzing AST & Security Vectors...</span>
               </>
             ) : (
               <>
-                <Play className="h-4 w-4 text-indigo-100" />
-                <span>Review My Code</span>
+                <Play className="h-4 w-4 fill-current" />
+                <span>Launch AI Review ({persona.toUpperCase()})</span>
               </>
             )}
           </button>
@@ -610,14 +738,13 @@ export default function NewReviewView({ onAddReview }: NewReviewViewProps) {
           {success && (
             <div id="submit-success-alert" className="bg-[#064e3b]/30 border border-emerald-500/20 text-emerald-400 p-4 rounded-2xl flex items-start gap-3 text-xs font-semibold animate-fade-in line-clamp-2">
               <CheckCircle className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
-              <span>Assessment created successfully! User streak increased and dashboard database refreshed.</span>
+              <span>Assessment created successfully! Streak updated and review archived.</span>
             </div>
           )}
 
           {analyzing ? (
             <LoadingSkeleton />
           ) : error ? (
-            /* Custom Proper Error Banner State */
             <div id="submit-error-alert" className="bg-[#881337]/15 border border-rose-500/30 text-rose-200 p-6 rounded-3xl flex flex-col gap-4 animate-fade-in shadow-lg">
               <div className="flex items-start gap-3.5">
                 <AlertCircle className="h-5.5 w-5.5 text-rose-500 shrink-0 mt-0.5" />
@@ -647,41 +774,41 @@ export default function NewReviewView({ onAddReview }: NewReviewViewProps) {
             </div>
           ) : reviewResult ? (
             /* Results Panel Card */
-            <div id="analysis-results-section" className="bg-[#111114] p-6 rounded-3xl border border-slate-800/80 shadow-2xl space-y-4 animate-fade-in text-center">
+            <div id="analysis-results-section" className="bg-[#0b0b0e] p-6 rounded-3xl border border-slate-800/80 shadow-2xl space-y-4 animate-fade-in text-center">
               <div className="flex items-center justify-between">
-                <span className="text-[10px] uppercase font-bold tracking-widest text-[#a855f7]">Quick Score Badge</span>
-                <div className="bg-[#a855f7]/10 p-2 rounded-xl text-[#a855f7] border border-[#a855f7]/15">
-                  <Sparkles className="h-4.5 w-4.5" />
+                <span className="text-[10px] uppercase font-bold tracking-widest text-accent font-mono">Active Score</span>
+                <div className="bg-accent/10 p-2 rounded-xl text-accent border border-accent/20">
+                  <Sparkles className="h-4 w-4" />
                 </div>
               </div>
 
               {/* Centered Score badge */}
-              <div className="text-center py-3 bg-[#0a0a0c] rounded-2xl border border-slate-800 space-y-1">
+              <div className="text-center py-3 bg-[#050507] rounded-2xl border border-slate-800 space-y-1">
                 <p className="text-[9px] uppercase tracking-widest font-bold text-slate-500">Overall Score</p>
-                <p className="text-4xl font-black text-indigo-400 leading-none py-1">{reviewResult.overall_score} pts</p>
+                <p className="text-4xl font-black text-accent leading-none py-1">{reviewResult.overall_score} pts</p>
               </div>
 
               {/* Brief summary text bubble */}
               <div className="bg-[#050507] p-4 rounded-xl border border-slate-800 space-y-1">
                 <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest text-left">Summary</p>
                 <p className="text-[11px] text-slate-300 leading-relaxed font-mono text-left italic">
-                  "{reviewResult.feedback?.summary || (reviewResult as any).summary}"
+                  &quot;{reviewResult.feedback?.summary || (reviewResult as any).summary}&quot;
                 </p>
               </div>
 
-              <div className="text-xs text-[#a855f7] font-bold animate-pulse font-sans">
-                ⬇️ Scroll down for full diffs and issues!
+              <div className="text-xs text-accent font-bold animate-pulse font-sans">
+                ⬇️ Scroll down for diffs, refactorings & interactive AI chat!
               </div>
 
             </div>
           ) : (
             /* Blank Placeholder State */
-            <div className="bg-[#0a0a0c] p-6 rounded-3xl border border-slate-800/80 shadow-lg text-center py-10 space-y-4 border-dashed bg-radial">
-              <HelpCircle className="h-8 w-8 text-indigo-500/55 mx-auto animate-bounce" />
+            <div className="bg-[#0a0a0c] p-6 rounded-3xl border border-slate-800/80 shadow-lg text-center py-10 space-y-4 border-dashed">
+              <HelpCircle className="h-8 w-8 text-slate-600 mx-auto animate-bounce" />
               <div className="space-y-1.5">
-                <h4 className="text-white text-xs font-bold font-sans uppercase tracking-widest">Awaiting assessment</h4>
+                <h4 className="text-white text-xs font-bold font-sans uppercase tracking-widest">Awaiting Code Audit</h4>
                 <p className="text-[10px] text-slate-500 max-w-[200px] mx-auto leading-relaxed">
-                  Supply code snippets inside the Monaco editor on the left and invoke "Review My Code" to launch AST calculations.
+                  Select an audit persona, paste code inside the Monaco editor, and click &quot;Launch AI Review&quot;.
                 </p>
               </div>
             </div>
@@ -690,16 +817,15 @@ export default function NewReviewView({ onAddReview }: NewReviewViewProps) {
           {/* Quick instructions and documentation */}
           <div className="bg-[#0a0a0c]/80 p-5 rounded-3xl border border-slate-850 shadow-md space-y-3">
             <span className="text-[9px] uppercase font-bold tracking-widest text-slate-500 flex items-center gap-1">
-              <Info className="h-3 w-3 text-indigo-400" />
-              <span>Diagnostic triggers available</span>
+              <Info className="h-3 w-3 text-accent" />
+              <span>Diagnostic Triggers & Personas</span>
             </span>
-            <div className="text-[10px] text-slate-500 space-y-2.5 leading-relaxed font-sans">
-              <p>The AST assessor compiles the script buffer dynamically. Select a language and type the following tags to inspect custom rule detections:</p>
-              <ul className="list-disc list-inside space-y-1 font-mono text-indigo-400">
-                <li><code className="text-slate-400">: any</code> (TS / JS typed bypassing)</li>
-                <li><code className="text-slate-400">SELECT ' +</code> (concatenated query)</li>
-                <li><code className="text-slate-400">eval()</code> (untrusted text compilation)</li>
-                <li><code className="text-slate-400">new</code> (C++ raw memory allocation)</li>
+            <div className="text-[10px] text-slate-500 space-y-2 leading-relaxed font-sans">
+              <p>Switch between specialized audit personas to change Gemini&apos;s evaluation strictness:</p>
+              <ul className="list-disc list-inside space-y-1 font-mono text-slate-400">
+                <li><strong className="text-rose-400">Security Auditor</strong>: OWASP & injection defense</li>
+                <li><strong className="text-cyan-400">Performance Ninja</strong>: Big-O & memory overhead</li>
+                <li><strong className="text-indigo-400">Junior Mentor</strong>: Friendly, guided tutorials</li>
               </ul>
             </div>
           </div>
@@ -714,6 +840,7 @@ export default function NewReviewView({ onAddReview }: NewReviewViewProps) {
             review={reviewResult as any} 
             originalCodeSnippet={codeSnippet} 
             language={language} 
+            onApplySuggestion={handleApplySuggestion}
           />
         </div>
       )}

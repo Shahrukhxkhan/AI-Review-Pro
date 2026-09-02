@@ -16,9 +16,10 @@ import {
   Monitor,
   Copy,
   User,
-  LogOut
+  LogOut,
+  Sliders
 } from 'lucide-react';
-import { Streak, DBUser } from '@/types';
+import { Streak, DBUser, ReviewPersona } from '@/types';
 import { getEnvKeys } from '@/lib/supabase';
 
 interface SettingsViewProps {
@@ -45,6 +46,34 @@ export default function SettingsView({
   // Warning triggers
   const [showSeedWarning, setShowSeedWarning] = useState(false);
   const [showClearWarning, setShowClearWarning] = useState(false);
+
+  // Custom Team Guidelines & Default Persona
+  const [customGuidelines, setCustomGuidelines] = useState(() => {
+    try {
+      return localStorage.getItem('ai_review_custom_guidelines') || '';
+    } catch {
+      return '';
+    }
+  });
+  const [defaultPersona, setDefaultPersona] = useState<ReviewPersona>(() => {
+    try {
+      return (localStorage.getItem('ai_review_default_persona') as ReviewPersona) || 'general';
+    } catch {
+      return 'general';
+    }
+  });
+  const [savedSettingsSuccess, setSavedSettingsSuccess] = useState(false);
+
+  const handleSaveGuidelines = () => {
+    try {
+      localStorage.setItem('ai_review_custom_guidelines', customGuidelines);
+      localStorage.setItem('ai_review_default_persona', defaultPersona);
+      setSavedSettingsSuccess(true);
+      setTimeout(() => setSavedSettingsSuccess(false), 2500);
+    } catch (err) {
+      console.error('Failed to write settings to local storage:', err);
+    }
+  };
 
   // Retrieve environment keys
   const envKeys = getEnvKeys();
@@ -148,6 +177,77 @@ create policy "Users can insert their own reports" on public.reports for insert 
               <LogOut className="h-4 w-4" />
               <span>Logout</span>
             </button>
+          </div>
+
+          {/* Team Guidelines & Audit Personas Card */}
+          <div className="bg-[#0a0a0c] p-6 rounded-2xl border border-slate-800/85 space-y-4 shadow-md">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Sliders className="h-4.5 w-4.5 text-accent" />
+                <h3 className="font-bold text-white text-sm">Team Guidelines & Audit Persona</h3>
+              </div>
+              <span className="text-[10px] font-mono text-slate-500 uppercase font-bold">Rule Injection</span>
+            </div>
+
+            <p className="text-xs text-slate-400 leading-relaxed">
+              Define custom architectural guidelines, banned packages, or convention rules. These constraints are injected directly into the Gemini prompt during review evaluations.
+            </p>
+
+            {/* Default Persona Selection */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-mono uppercase font-bold text-slate-400">Default Audit Persona</label>
+              <select
+                value={defaultPersona}
+                onChange={(e) => setDefaultPersona(e.target.value as ReviewPersona)}
+                className="w-full bg-[#050507] border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 outline-none focus:border-accent cursor-pointer"
+              >
+                <option value="general">Balanced Generalist (Industry best practices)</option>
+                <option value="security">Strict Security Auditor (OWASP, injections, secrets)</option>
+                <option value="performance">Performance & Memory Ninja (Big-O, heap, async)</option>
+                <option value="mentor">Junior Mentor (Educational, kind analogies)</option>
+              </select>
+            </div>
+
+            {/* Custom Guidelines Textarea */}
+            <div className="space-y-1.5">
+              <div className="flex justify-between items-center">
+                <label className="text-[10px] font-mono uppercase font-bold text-slate-400">Custom Organization Rules</label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCustomGuidelines(
+`1. Disallow ': any' in TypeScript; enforce strict unknown or explicit interfaces.
+2. All database queries must use prepared statements or parameter binding to prevent SQL injection.
+3. Avoid lodash/moment; prefer native ES6+ methods and native Date/Intl.
+4. All async operations must have structured error handling.`
+                    );
+                  }}
+                  className="text-[10px] text-accent hover:underline cursor-pointer font-bold"
+                >
+                  + Insert Sample Rules
+                </button>
+              </div>
+              <textarea
+                rows={4}
+                value={customGuidelines}
+                onChange={(e) => setCustomGuidelines(e.target.value)}
+                placeholder="e.g. 1. Never use var. 2. Enforce explicit return types on exported functions. 3. All external network calls must set a 5-second timeout."
+                className="w-full bg-[#050507] border border-slate-800 rounded-xl p-3 text-xs text-slate-200 font-mono placeholder-slate-600 outline-none focus:border-accent"
+              />
+            </div>
+
+            <div className="flex items-center justify-between pt-1">
+              <span className="text-[10px] font-mono text-slate-500">
+                {savedSettingsSuccess ? <span className="text-accent font-bold">✓ Saved guidelines successfully!</span> : 'Persisted in browser storage'}
+              </span>
+              <button
+                type="button"
+                onClick={handleSaveGuidelines}
+                className="bg-accent text-bg px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider hover:opacity-90 transition cursor-pointer shadow-lg shadow-accent/10"
+              >
+                Save Guidelines
+              </button>
+            </div>
           </div>
           
           <div className="flex items-center space-x-3.5">
