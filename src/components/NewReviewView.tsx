@@ -294,7 +294,7 @@ export class UserController {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    Array.from(files).forEach((file) => {
+    Array.from(files).forEach((file: File) => {
       const reader = new FileReader();
       reader.onload = (event) => {
         const text = event.target?.result as string;

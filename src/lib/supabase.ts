@@ -1,8 +1,10 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 // Get keys from environment variables safely
-const supabaseUrl = (import.meta as any).env?.VITE_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = (import.meta as any).env?.VITE_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const env = (import.meta as any).env || {};
+const procEnv = typeof process !== 'undefined' ? process.env : {};
+const supabaseUrl = env.VITE_PUBLIC_SUPABASE_URL || procEnv.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseAnonKey = env.VITE_PUBLIC_SUPABASE_ANON_KEY || procEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
 let supabaseInstance: SupabaseClient | null = null;
 

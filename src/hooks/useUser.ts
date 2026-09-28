@@ -8,12 +8,42 @@ export interface ExtendedUser extends DBUser {
 }
 
 export function useUser() {
-  const [user, setUser] = useState<ExtendedUser | null>(null);
-  const [session, setSession] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-
-  const supabase = getSupabase();
   const isSupabaseConnected = isSupabaseConfigured();
+  const supabase = getSupabase();
+
+  const [user, setUser] = useState<ExtendedUser | null>(() => {
+    if (!isSupabaseConnected) {
+      return {
+        id: 'local_user',
+        github_username: 'octocat_reviewer',
+        email: 'octocat@github.com',
+        created_at: new Date().toISOString(),
+        avatar_url: 'https://avatars.githubusercontent.com/u/5832347?v=4',
+        name: 'The Review Octocat'
+      };
+    }
+    return null;
+  });
+
+  const [session, setSession] = useState<any>(() => {
+    if (!isSupabaseConnected) {
+      return {
+        user: {
+          id: 'local_user',
+          email: 'octocat@github.com',
+          user_metadata: {
+            preferred_username: 'octocat_reviewer',
+            avatar_url: 'https://avatars.githubusercontent.com/u/5832347?v=4',
+            full_name: 'The Review Octocat'
+          }
+        },
+        access_token: 'mock_token_123'
+      };
+    }
+    return null;
+  });
+
+  const [loading, setLoading] = useState(() => isSupabaseConnected);
 
   useEffect(() => {
     if (!isSupabaseConnected || !supabase) {

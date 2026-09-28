@@ -479,7 +479,7 @@ Answer the developer's follow-up questions accurately, concisely, and practicall
 
 export async function startServer() {
   const app = createExpressApp();
-  const PORT = process.env.PORT || 3000;
+  const PORT = Number(process.env.PORT) || 3000;
 
   // Vite integration middleware
   if (process.env.NODE_ENV !== 'production') {

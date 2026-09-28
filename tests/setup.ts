@@ -2,7 +2,7 @@ import { vi } from 'vitest';
 
 if (typeof window !== 'undefined') {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  import('@testing-library/jest-dom');
+  import('@testing-library/jest-dom/vitest');
 
   // Mock window.matchMedia
   Object.defineProperty(window, 'matchMedia', {
