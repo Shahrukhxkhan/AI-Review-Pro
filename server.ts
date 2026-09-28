@@ -4,7 +4,6 @@ import path from 'path';
 import dotenv from 'dotenv';
 import { GoogleGenAI } from '@google/genai';
 import { createClient } from '@supabase/supabase-js';
-import { createServer as createViteServer } from 'vite';
 
 // Load environment variables
 dotenv.config();
@@ -663,6 +662,7 @@ export async function startServer() {
 
   // Vite integration middleware
   if (process.env.NODE_ENV !== 'production') {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa'
@@ -684,9 +684,11 @@ export async function startServer() {
   return app;
 }
 
-if (process.env.NODE_ENV !== 'test') {
+if (process.env.NODE_ENV !== 'test' && !process.env.VERCEL) {
   startServer().catch((error) => {
     console.error('Failed to boot Express web server:', error);
   });
 }
+
+export default createExpressApp();
 
