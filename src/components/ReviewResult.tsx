@@ -20,12 +20,15 @@ import {
   Bot,
   User,
   Zap,
-  RotateCcw
+  RotateCcw,
+  GitPullRequest
 } from 'lucide-react';
 import { exportToJson, exportToMarkdown, exportToPdf } from '@/lib/export';
 import { RadialBarChart, RadialBar, ResponsiveContainer, PolarAngleAxis } from 'recharts';
 import { DiffEditor } from '@monaco-editor/react';
 import { ChatMessage } from '@/types';
+import SandboxRunner from './SandboxRunner';
+import CreatePrModal from './CreatePrModal';
 
 interface Issue {
   type: string;
@@ -86,6 +89,8 @@ export default function ReviewResult({ review, originalCodeSnippet, language, on
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [appliedIndex, setAppliedIndex] = useState<number | null>(null);
   const [shareToast, setShareToast] = useState(false);
+  const [isPrModalOpen, setIsPrModalOpen] = useState(false);
+  const [showSandbox, setShowSandbox] = useState(false);
 
   // Interactive Follow-up Chat State
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
@@ -507,15 +512,33 @@ export default function ReviewResult({ review, originalCodeSnippet, language, on
                   </p>
                 </div>
 
-                {onApplySuggestion && (
+                <div className="flex items-center gap-2">
                   <button
-                    onClick={() => handleApply(suggestionsList[activeSuggestionIndex]?.improved_code || '', activeSuggestionIndex)}
-                    className="bg-accent/10 border border-accent/20 text-accent hover:bg-accent hover:text-bg px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider transition shrink-0 flex items-center gap-1 cursor-pointer"
+                    onClick={() => setShowSandbox(!showSandbox)}
+                    className="bg-[#121218] border border-slate-800 text-slate-300 hover:text-white px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider transition shrink-0 flex items-center gap-1.5 cursor-pointer"
                   >
-                    <Sparkles className="w-3 h-3" />
-                    Apply Code
+                    <Terminal className="w-3 h-3 text-accent" />
+                    {showSandbox ? 'Hide Test Runner' : 'Run Tests'}
                   </button>
-                )}
+
+                  <button
+                    onClick={() => setIsPrModalOpen(true)}
+                    className="bg-purple-600/15 border border-purple-500/30 text-purple-300 hover:bg-purple-600/25 px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider transition shrink-0 flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <GitPullRequest className="w-3 h-3 text-purple-400" />
+                    Create PR
+                  </button>
+
+                  {onApplySuggestion && (
+                    <button
+                      onClick={() => handleApply(suggestionsList[activeSuggestionIndex]?.improved_code || '', activeSuggestionIndex)}
+                      className="bg-accent/10 border border-accent/20 text-accent hover:bg-accent hover:text-bg px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider transition shrink-0 flex items-center gap-1 cursor-pointer"
+                    >
+                      <Sparkles className="w-3 h-3" />
+                      Apply Code
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Side-by-Side Monaco Diff Editor Container */}
@@ -563,12 +586,33 @@ export default function ReviewResult({ review, originalCodeSnippet, language, on
                 </div>
               </div>
 
+              {/* In-Browser Sandboxed Runner Panel */}
+              {showSandbox && (
+                <div className="pt-2 animate-fade-in">
+                  <SandboxRunner
+                    code={suggestionsList[activeSuggestionIndex]?.improved_code || originalCodeSnippet}
+                    language={language}
+                    suggestionTitle={suggestionsList[activeSuggestionIndex]?.title}
+                  />
+                </div>
+              )}
+
             </div>
 
           </div>
         )}
 
       </div>
+
+      {/* 1-Click Pull Request Modal */}
+      <CreatePrModal
+        isOpen={isPrModalOpen}
+        onClose={() => setIsPrModalOpen(false)}
+        originalCode={originalCodeSnippet}
+        improvedCode={suggestionsList[activeSuggestionIndex]?.improved_code || originalCodeSnippet}
+        language={language}
+        suggestionTitle={suggestionsList[activeSuggestionIndex]?.title || 'code refactoring'}
+      />
 
       {/* 4. Interactive Follow-up Chat: "Ask AI About This Review" */}
       <div id="review-chat-section" className="bg-[#0b0b0e] p-6 rounded-3xl border border-slate-800/80 shadow-xl space-y-5">

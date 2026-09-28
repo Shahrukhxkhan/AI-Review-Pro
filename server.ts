@@ -441,6 +441,116 @@ Answer the developer's follow-up questions accurately, concisely, and practicall
     }
   });
 
+  // Automated GitHub Branch & Pull Request Creator endpoint
+  app.post('/api/github/create-pr', async (req, res) => {
+    const { repo, branchName, filePath, commitMessage, prTitle, prBody, content, token } = req.body;
+
+    if (!repo || !token || !content) {
+      res.status(400).json({ error: 'Missing required parameters: repo, token, or content.' });
+      return;
+    }
+
+    try {
+      const headers = {
+        'Authorization': `token ${token}`,
+        'Accept': 'application/vnd.github.v3+json',
+        'User-Agent': 'AI-Review-Pro-Platform'
+      };
+
+      // 1. Get default branch & latest commit SHA
+      const repoRes = await fetch(`https://api.github.com/repos/${repo}`, { headers });
+      if (!repoRes.ok) {
+        throw new Error(`Repository access failed (${repoRes.status}): verify repo name and token permissions.`);
+      }
+      const repoData = await repoRes.json();
+      const defaultBranch = repoData.default_branch || 'main';
+
+      const refRes = await fetch(`https://api.github.com/repos/${repo}/git/ref/heads/${defaultBranch}`, { headers });
+      if (!refRes.ok) {
+        throw new Error(`Failed to locate base branch ${defaultBranch}`);
+      }
+      const refData = await refRes.json();
+      const baseSha = refData.object.sha;
+
+      // 2. Create new branch reference
+      const createBranchRes = await fetch(`https://api.github.com/repos/${repo}/git/refs`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          ref: `refs/heads/${branchName}`,
+          sha: baseSha
+        })
+      });
+
+      // If branch exists, continue or report
+      if (!createBranchRes.ok && createBranchRes.status !== 422) {
+        const branchErr = await createBranchRes.json();
+        throw new Error(branchErr.message || 'Failed creating new branch.');
+      }
+
+      // 3. Get existing file sha if file exists on this branch
+      let fileSha: string | undefined = undefined;
+      const getFileRes = await fetch(`https://api.github.com/repos/${repo}/contents/${filePath}?ref=${branchName}`, { headers });
+      if (getFileRes.ok) {
+        const fileData = await getFileRes.json();
+        fileSha = fileData.sha;
+      }
+
+      // 4. Commit updated file
+      const commitRes = await fetch(`https://api.github.com/repos/${repo}/contents/${filePath}`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({
+          message: commitMessage || `fix: apply AI suggestion for ${filePath}`,
+          content: Buffer.from(content).toString('base64'),
+          branch: branchName,
+          ...(fileSha ? { sha: fileSha } : {})
+        })
+      });
+
+      if (!commitRes.ok) {
+        const commitErr = await commitRes.json();
+        throw new Error(commitErr.message || 'Failed committing updated file to branch.');
+      }
+
+      // 5. Open Pull Request
+      const prRes = await fetch(`https://api.github.com/repos/${repo}/pulls`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          title: prTitle,
+          body: prBody,
+          head: branchName,
+          base: defaultBranch
+        })
+      });
+
+      if (!prRes.ok) {
+        const prErr = await prRes.json();
+        // If PR already exists, locate it
+        if (prRes.status === 422) {
+          res.json({
+            success: true,
+            branch: branchName,
+            prUrl: `https://github.com/${repo}/compare/${defaultBranch}...${branchName}`
+          });
+          return;
+        }
+        throw new Error(prErr.message || 'Failed creating pull request.');
+      }
+
+      const prResult = await prRes.json();
+      res.json({
+        success: true,
+        branch: branchName,
+        prUrl: prResult.html_url
+      });
+    } catch (err: any) {
+      console.error('Error dispatching GitHub PR creation:', err);
+      res.status(500).json({ error: err.message || 'GitHub PR creation failed.' });
+    }
+  });
+
   // Public unauthenticated review fetcher for shareable permalinks
   app.get('/api/public/review/:id', async (req, res) => {
     const { id } = req.params;
