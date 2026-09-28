@@ -52,8 +52,11 @@ export const useNotifications = (userId: string | undefined) => {
             }
           } else if (payload.eventType === 'UPDATE') {
             const updatedNotif = payload.new as Notification;
-            setNotifications((prev) => prev.map((n) => (n.id === updatedNotif.id ? updatedNotif : n)));
-            setUnreadCount(notifications => notifications.filter(n => !n.read).length);
+            setNotifications((prev) => {
+              const next = prev.map((n) => (n.id === updatedNotif.id ? updatedNotif : n));
+              setUnreadCount(next.filter(n => !n.read).length);
+              return next;
+            });
           }
         }
       )

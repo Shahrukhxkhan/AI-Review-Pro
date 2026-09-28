@@ -75,11 +75,11 @@ export default function ComparisonView({ currentUser }: ComparisonViewProps) {
         <div className="flex gap-4">
           <div className="flex items-center gap-1.5 text-xs font-mono font-bold text-[#00ffaa]">
             <div className="w-1.5 h-1.5 rounded-full bg-[#00ffaa]" />
-            {valA !== undefined ? valA : '—'}{isPercent && valA !== undefined ? '%' : ''}
+            {typeof valA === 'number' || typeof valA === 'string' ? valA : '—'}{isPercent && typeof valA === 'number' ? '%' : ''}
           </div>
           <div className="flex items-center gap-1.5 text-xs font-mono font-bold text-[#38bdf8]">
             <div className="w-1.5 h-1.5 rounded-full bg-[#38bdf8]" />
-            {valB !== undefined ? valB : '—'}{isPercent && valB !== undefined ? '%' : ''}
+            {typeof valB === 'number' || typeof valB === 'string' ? valB : '—'}{isPercent && typeof valB === 'number' ? '%' : ''}
           </div>
         </div>
         {!isIssue && typeof valA === 'number' && typeof valB === 'number' && (

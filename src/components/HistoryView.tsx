@@ -196,7 +196,7 @@ export default function HistoryView({
       }
 
       // 4. Search substring lookup
-      const summaryText = r.feedback?.summary || r.summary || '';
+      const summaryText = r.feedback?.summary || '';
       const matchSearch = r.code_snippet.toLowerCase().includes(search.toLowerCase()) ||
                           r.language.toLowerCase().includes(search.toLowerCase()) ||
                           summaryText.toLowerCase().includes(search.toLowerCase());
@@ -442,7 +442,7 @@ export default function HistoryView({
                     <div className="space-y-1.5">
                       <h4 className="text-xs font-mono text-slate-500 tracking-wider uppercase font-extrabold">Executive Summary</h4>
                       <p className="text-sm text-slate-300 font-sans font-medium line-clamp-2 leading-relaxed">
-                        "{r.feedback?.summary || r.summary || 'Summary placeholder'}"
+                        "{r.feedback?.summary || 'Code audit analysis completed.'}"
                       </p>
                     </div>
 
@@ -542,7 +542,25 @@ export default function HistoryView({
 
               {/* Render polished Recharts Radial Gauge scoreboard and side-by-side Diffs */}
               <ReviewResult 
-                review={activeReview} 
+                review={{
+                  overall_score: activeReview.overall_score,
+                  bug_score: activeReview.bug_score,
+                  security_score: activeReview.security_score,
+                  readability_score: activeReview.readability_score,
+                  complexity_score: activeReview.complexity_score,
+                  summary: activeReview.feedback?.summary || 'Analysis complete.',
+                  issues: activeReview.feedback?.key_issues?.map((iss, i) => ({
+                    type: 'Standard Rule',
+                    severity: 'medium' as const,
+                    line: i + 1,
+                    description: iss
+                  })) || [],
+                  suggestions: activeReview.feedback?.suggestions?.map(s => ({
+                    title: s.issue.split(':')[0] || 'Refactor Suggestion',
+                    explanation: s.issue.split(':')[1] || s.issue,
+                    improved_code: s.fix
+                  })) || []
+                }} 
                 originalCodeSnippet={activeReview.code_snippet} 
                 language={activeReview.language} 
               />
