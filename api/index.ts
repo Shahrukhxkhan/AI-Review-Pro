@@ -1,5 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { createExpressApp } from '../server.ts';
+import { createRequire } from 'module';
+
+const require = createRequire(import.meta.url);
+const { createExpressApp } = require('./server.cjs');
 
 const app = createExpressApp();
 
